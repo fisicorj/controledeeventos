@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}Configurações | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h1>Configurações</h1>
+      <p>Identidade do portal, dados da instituição e assinatura dos certificados.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="{% url 'certificate_preview' %}" target="_blank"><i class="bi bi-award"></i>Pré-visualizar certificado</a>
+  </div>
+  {% include 'core/_tabs.html' with active='institution' %}
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Identidade do portal</h2><p>Como o sistema aparece para alunos e visitantes.</p></div></div>
+      <div class="panel-body">
+        <div class="row g-4">
+          <div class="col-md-7">
+            {% include 'core/_field.html' with field=form.portal_name %}
+            {% include 'core/_field.html' with field=form.primary_color %}
+            {% include 'core/_field.html' with field=form.logo image=portal.logo %}
+          </div>
+          <div class="col-md-5">
+            <div class="form-label">Pré-visualização</div>
+            <div class="border rounded-3 overflow-hidden" aria-hidden="true">
+              <div class="d-flex align-items-center gap-2 p-3 bg-white border-bottom">
+                {% if portal.logo %}<img src="{{ portal.logo.url }}" alt="" style="max-height:30px;max-width:110px">{% else %}<span class="brand-mark" id="pv-mark" style="width:30px;height:30px;font-size:.9rem">{{ portal.portal_name|slice:":1" }}</span>{% endif %}
+                <strong id="pv-name" class="small">{{ portal.portal_name }}</strong>
+              </div>
+              <div class="p-3" style="background:var(--paper)">
+                <div class="d-flex gap-2 align-items-center">
+                  <span class="date-block sm" id="pv-date"><span class="month" id="pv-month">out</span><span class="day">12</span></span>
+                  <div>
+                    <div class="small fw-semibold">Semana de Tecnologia</div>
+                    <span class="btn btn-sm mt-1" id="pv-btn" style="background:var(--brand);color:var(--brand-contrast)">Inscrever-se</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="form-text mt-2">A cor muda na pré-visualização enquanto você escolhe; vale para todo o site depois de salvar.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Instituição</h2><p>Aparece nos certificados, relatórios em PDF e e-mails.</p></div></div>
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-md-7">{% include 'core/_field.html' with field=form.institution_name %}</div>
+          <div class="col-md-5">{% include 'core/_field.html' with field=form.city %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Assinatura dos certificados</h2><p>Em branco, cada certificado sai assinado pelo organizador da atividade.</p></div></div>
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.signer_name %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.signer_role %}</div>
+        </div>
+        {% include 'core/_field.html' with field=form.signature_image image=portal.signature_image %}
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head">
+        <div><h2>Modelo do certificado</h2><p>Envie a arte da instituição e ajuste os textos. O sistema escreve nome, atividade, datas e assinatura por cima.</p></div>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'certificate_preview' %}" target="_blank"><i class="bi bi-eye"></i>Pré-visualizar</a>
+      </div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=form.certificate_background image=portal.certificate_background %}
+        <div class="row g-3">
+          <div class="col-md-5">{% include 'core/_field.html' with field=form.certificate_title %}</div>
+          <div class="col-md-7">{% include 'core/_field.html' with field=form.certificate_opening %}</div>
+        </div>
+        {% include 'core/_field.html' with field=form.certificate_place %}
+        <div class="row g-3">
+          <div class="col-md-5">{% include 'core/_field.html' with field=form.document_label %}</div>
+          <div class="col-md-7">{% include 'core/_field.html' with field=form.certificate_offset_mm %}</div>
+        </div>
+        {% include 'core/_field.html' with field=form.certificate_show_qr %}
+        <div class="small text-secondary border rounded-3 p-3 bg-light">
+          <strong>Como fica o texto:</strong> {{ portal.certificate_opening|default:"Certificamos que" }} <em>Nome do Participante</em>, participou do “<strong>Título da atividade</strong>”,{% if portal.certificate_place %} realizado {{ portal.certificate_place }},{% else %} realizado{% endif %} no dia 29 de agosto de 2026, com duração de 4 horas. {{ portal.city|default:"" }}{% if portal.city %},{% endif %} data da emissão.
+        </div>
+      </div>
+    </section>
+
+    <div class="d-flex gap-3 align-items-center mb-2">
+      <button class="btn btn-primary px-4">Salvar</button>
+      <span class="small text-secondary">Salve antes de pré-visualizar o certificado.</span>
+    </div>
+  </form>
+  <p class="small text-secondary mt-3">Certificados já emitidos guardam o nome do participante e da atividade da época da emissão; o visual (logo, assinatura, nome da instituição) segue as configurações atuais sempre que o PDF é baixado.</p>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    const color = document.getElementById('{{ form.primary_color.id_for_label }}');
+    const name = document.getElementById('{{ form.portal_name.id_for_label }}');
+    const preview = document.querySelector('.border.rounded-3');
+    function contrast(hex) {
+      const c = [1, 3, 5].map(i => parseInt(hex.substr(i, 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.4 ? '#ffffff' : '#1c2533';
+    }
+    color.addEventListener('input', () => {
+      preview.style.setProperty('--brand', color.value);
+      preview.style.setProperty('--brand-contrast', contrast(color.value));
+    });
+    name.addEventListener('input', () => { document.getElementById('pv-name').textContent = name.value; });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Minhas inscrições | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <h1>Minhas inscrições</h1>
+    <p>Apresente o QR Code no credenciamento e na presença de cada sessão.</p>
+  </div>
+  <div class="row g-4">
+    {% for registration in registrations %}
+      {% with activity=registration.activity %}
+      <div class="col-xl-6">
+        <article class="ticket{% if registration.status == 'CANCELLED' or activity.status == 'CANCELLED' %} is-muted{% endif %}">
+          <div class="ticket-main">
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <span class="pill {% if registration.status == 'CONFIRMED' %}pill-open{% elif registration.status == 'WAITLISTED' %}pill-wait{% else %}pill-muted{% endif %}">{{ registration.get_status_display }}</span>
+              <span class="type-label">{{ activity.get_activity_type_display }}</span>
+            </div>
+            <h2 class="h5 mb-0"><a href="{% url 'activity_detail' activity.pk %}" class="text-reset text-decoration-none">{{ activity.title }}</a></h2>
+            <ul class="event-meta">
+              <li><i class="bi bi-clock" aria-hidden="true"></i>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</li>
+              {% if activity.location %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i>{{ activity.location }}</li>{% endif %}
+              {% if registration.status == 'CONFIRMED' and registration.attendance_percent is not None and activity.status != 'CANCELLED' %}
+                <li><i class="bi bi-person-check" aria-hidden="true"></i>Frequência: {{ registration.attendance_count }}/{{ registration.session_count }} sessões ({{ registration.attendance_percent }}%)</li>
+              {% endif %}
+            </ul>
+
+            <div class="mt-auto pt-2">
+            {% if activity.status == 'CANCELLED' %}
+              <div class="small text-danger"><i class="bi bi-x-octagon me-1" aria-hidden="true"></i>Esta atividade foi cancelada pela organização.</div>
+            {% elif activity.status == 'FINISHED' %}
+              {% if registration.certificate %}
+                <div class="small mb-2">Certificado emitido. Código de validação: <strong class="tabular">{{ registration.certificate.code }}</strong></div>
+              {% elif registration.status == 'CONFIRMED' and activity.certificate_enabled %}
+                <div class="small text-secondary">Atividade finalizada. O certificado exige pelo menos {{ activity.min_attendance_percent }}% de frequência.</div>
+              {% else %}
+                <div class="small text-secondary">Atividade finalizada.</div>
+              {% endif %}
+            {% elif registration.status == 'CONFIRMED' %}
+              <form method="post" action="{% url 'cancel_registration' registration.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-link btn-sm text-danger p-0">Cancelar inscrição</button>
+              </form>
+            {% elif registration.status == 'WAITLISTED' %}
+              <p class="small text-secondary mb-2">Se abrir uma vaga, sua inscrição é confirmada automaticamente e você recebe o QR Code por e-mail.</p>
+              <form method="post" action="{% url 'cancel_registration' registration.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-link btn-sm text-danger p-0">Sair da lista de espera</button>
+              </form>
+            {% endif %}
+            </div>
+          </div>
+
+          <div class="ticket-stub">
+            {% if activity.status == 'FINISHED' and registration.certificate %}
+              <i class="bi bi-award fs-1 text-primary" aria-hidden="true"></i>
+              <a class="btn btn-primary btn-sm" href="{% url 'certificate_download' registration.certificate.code %}" target="_blank">Baixar certificado (PDF)</a>
+            {% elif registration.status == 'CONFIRMED' and activity.status == 'PUBLISHED' %}
+              <img src="{% url 'registration_qr' registration.pk %}" class="qr" alt="QR Code da inscrição em {{ activity.title }}">
+              <small>Apresente na entrada</small>
+            {% elif registration.status == 'WAITLISTED' %}
+              <span class="stub-big">{{ registration.position }}º</span>
+              <small>posição <strong>{{ registration.position }}</strong> na lista de espera</small>
+            {% else %}
+              {% include 'core/_date.html' with date=activity.start_date %}
+            {% endif %}
+          </div>
+        </article>
+      </div>
+      {% endwith %}
+    {% empty %}
+      <div class="col-12">
+        <div class="panel empty-state">
+          <i class="bi bi-ticket-perforated"></i>
+          Você ainda não possui inscrições. <a href="{% url 'activity_list' %}">Ver atividades abertas</a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

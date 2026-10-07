@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Validar certificado | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <h1>Validar certificado</h1>
+    <p>Digite o código impresso no certificado para conferir se ele é autêntico.</p>
+  </div>
+  <form method="get" action="{% url 'certificate_verify' %}" class="search-box mb-4" style="max-width:none">
+    <i class="bi bi-patch-check" aria-hidden="true"></i>
+    <input name="codigo" class="form-control tabular" placeholder="Ex.: ABCD-EFGH-JKMN" value="{{ raw }}" aria-label="Código do certificado" required>
+    <button class="btn btn-primary px-4">Validar</button>
+  </form>
+  {% if certificate %}
+    <div class="panel">
+      {% if certificate.is_revoked %}
+        <div class="panel-head" style="border-bottom-color: #f1c9c9; background: #fdf1f1; border-radius: 1rem 1rem 0 0">
+          <div>
+            <h2 class="text-danger"><i class="bi bi-x-octagon-fill me-2" aria-hidden="true"></i>Certificado revogado</h2>
+            <p class="mb-0">Este certificado foi emitido pela instituição, mas foi revogado em {{ certificate.revoked_at|date:'d/m/Y' }} e <strong>não tem mais validade</strong>.{% if certificate.revoked_reason %} Motivo: {{ certificate.revoked_reason }}{% endif %}</p>
+          </div>
+        </div>
+      {% else %}
+        <div class="panel-head" style="border-bottom-color: #cfe9da; background: #eef8f2; border-radius: 1rem 1rem 0 0">
+          <h2 class="text-success"><i class="bi bi-patch-check-fill me-2" aria-hidden="true"></i>Certificado autêntico</h2>
+        </div>
+      {% endif %}
+      <dl class="row mb-0 panel-body">
+        <dt class="col-sm-4">Participante</dt><dd class="col-sm-8">{{ certificate.participant_name }}</dd>
+        <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
+        <dt class="col-sm-4">Período</dt><dd class="col-sm-8">{{ certificate.start_date|date:'d/m/Y' }} a {{ certificate.end_date|date:'d/m/Y' }}</dd>
+        {% if certificate.workload_hours %}<dt class="col-sm-4">Carga horária</dt><dd class="col-sm-8">{{ certificate.workload_hours }} horas</dd>{% endif %}
+        {% if certificate.attendance_percent is not None %}<dt class="col-sm-4">Frequência</dt><dd class="col-sm-8">{{ certificate.attendance_percent }}%</dd>{% endif %}
+        {% if certificate.participant_document %}<dt class="col-sm-4">{{ portal.document_label|default:"Matrícula" }}</dt><dd class="col-sm-8">{{ certificate.participant_document }}</dd>{% endif %}
+        <dt class="col-sm-4">Emitido em</dt><dd class="col-sm-8">{{ certificate.certificate_date|date:'d/m/Y' }}</dd>
+        <dt class="col-sm-4">Código</dt><dd class="col-sm-8 mb-0"><code class="fs-6">{{ certificate.code }}</code></dd>
+      </dl>
+    </div>
+  {% elif not_found %}
+    <div class="alert alert-danger flash"><i class="bi bi-x-octagon" aria-hidden="true"></i><div>Nenhum certificado encontrado com o código <strong>{{ raw }}</strong>. Confira se foi digitado corretamente.</div></div>
+  {% endif %}
+</main>
+{% endblock %}

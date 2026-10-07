@@ -1,0 +1,14 @@
+Django>=5.2,<6.0
+psycopg[binary]>=3.2
+python-dotenv>=1.0
+Pillow>=11.0
+openpyxl>=3.1
+qrcode[pil]>=8.0
+reportlab>=4.2
+cryptography>=42
+whitenoise>=6.7
+# Servidor de produção: gunicorn no Linux/Docker, waitress no Windows
+gunicorn>=23.0; sys_platform != "win32"
+waitress>=3.0; sys_platform == "win32"
+ruff>=0.6
+

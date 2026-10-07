@@ -1,0 +1,36 @@
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Django
+media/
+staticfiles/
+*.sqlite3
+*.log
+
+# Backups e exportações locais
+*.dump
+*.sql
+*.bak
+backups/
+
+# Editores e sistema
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

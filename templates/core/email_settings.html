@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Configuração de e-mail | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <h1>Configurações</h1>
+    <p>Servidor SMTP ou relay usado para enviar confirmações de inscrição, avisos da lista de espera, lembretes, certificados e recuperação de senha.</p>
+  </div>
+  {% include 'core/_tabs.html' with active='email' %}
+
+  <div class="alert {% if config.enabled and config.last_test_ok is False %}alert-warning{% elif config.enabled %}alert-success{% else %}alert-secondary{% endif %} d-flex justify-content-between flex-wrap gap-2">
+    <span>
+      {% if config.enabled %}<strong>Envio ligado</strong> via {{ config.host }}:{{ config.port }} ({% if config.security == 'NONE' %}sem criptografia{% elif config.security == 'SSL' %}SSL/TLS{% else %}STARTTLS{% endif %}{% if config.username %}, com autenticação{% endif %}){% if config.sender %}, remetente {{ config.sender }}{% endif %}.
+      {% else %}<strong>Envio desligado.</strong> Os e-mails não saem; aparecem só no log/terminal.{% endif %}
+    </span>
+    {% if config.last_test_at %}
+      <span class="small">Último teste em {{ config.last_test_at|date:'d/m/Y H:i' }}:
+        {% if config.last_test_ok %}<span class="text-success fw-semibold">ok</span>{% else %}<span class="text-danger fw-semibold">falhou</span>{% endif %}
+      </span>
+    {% endif %}
+  </div>
+  {% if config.last_test_at and not config.last_test_ok %}
+    <div class="alert alert-danger small"><strong>Erro do último teste:</strong> {{ config.last_test_message }}</div>
+  {% endif %}
+
+  <form method="post" class="panel panel-body mb-4" autocomplete="off" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="form-check form-switch mb-3">
+      {{ form.enabled }}
+      <label class="form-check-label fw-semibold" for="{{ form.enabled.id_for_label }}">{{ form.enabled.label }}</label>
+      <div class="form-text">{{ form.enabled.help_text }}</div>
+      {% for error in form.enabled.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+
+    <h2 class="h5">Servidor</h2>
+    <div class="row g-3">
+      <div class="col-md-8">{% include 'core/_field.html' with field=form.host %}</div>
+      <div class="col-md-4">{% include 'core/_field.html' with field=form.port %}</div>
+    </div>
+    {% include 'core/_field.html' with field=form.security %}
+    <div class="form-check mb-3">
+      {{ form.verify_certificate }}
+      <label class="form-check-label" for="{{ form.verify_certificate.id_for_label }}">{{ form.verify_certificate.label }}</label>
+      <div class="form-text">{{ form.verify_certificate.help_text }}</div>
+    </div>
+
+    <h2 class="h5 mt-2">Autenticação</h2>
+    <div class="row g-3">
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.username %}</div>
+      <div class="col-md-6">
+        {% include 'core/_field.html' with field=form.password %}
+        {% if config.has_password %}
+          <div class="small text-success mb-1">Há uma senha cadastrada.</div>
+          <div class="form-check mb-3">{{ form.clear_password }} <label class="form-check-label small" for="{{ form.clear_password.id_for_label }}">{{ form.clear_password.label }}</label></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <h2 class="h5 mt-2">Remetente</h2>
+    <div class="row g-3">
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.from_email %}</div>
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.from_name %}</div>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.reply_to %}</div>
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.timeout %}</div>
+    </div>
+
+    <div><button class="btn btn-primary">Salvar</button></div>
+  </form>
+
+  <form method="post" action="{% url 'email_test' %}" class="panel panel-body mb-4">
+    {% csrf_token %}
+    <h2 class="h5">Testar envio</h2>
+    <p class="small text-secondary">Usa a configuração <strong>salva</strong>. Se falhar, a mensagem de erro do servidor aparece aqui para ajudar no diagnóstico.</p>
+    <div class="d-flex gap-2 flex-wrap align-items-end">
+      <div class="flex-grow-1">
+        <label class="form-label" for="{{ test_form.recipient.id_for_label }}">{{ test_form.recipient.label }}</label>
+        {{ test_form.recipient }}
+      </div>
+      <button class="btn btn-outline-primary">Enviar teste</button>
+    </div>
+  </form>
+</main>
+<script>
+  // Ao trocar o tipo de segurança, sugere a porta padrão (só se a porta atual for a padrão de outro tipo).
+  (function () {
+    const ports = {{ default_ports_json|safe }};
+    const security = document.getElementById('{{ form.security.id_for_label }}');
+    const port = document.getElementById('{{ form.port.id_for_label }}');
+    security.addEventListener('change', () => {
+      if (Object.values(ports).map(String).includes(port.value)) port.value = ports[security.value];
+    });
+  })();
+</script>
+{% endblock %}

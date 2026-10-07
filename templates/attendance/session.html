@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Presença | {{ session.title }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' session.activity.id %}">{{ session.activity.title }}</a></div>
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+      <div class="d-flex gap-3 align-items-center">
+        {% include 'core/_date.html' with date=session.start_at %}
+        <div>
+          <h1 class="mb-1">Controle de presença</h1>
+          <p class="m-0">{{ session.title }} · {{ session.start_at|date:'H:i' }} até {{ session.end_at|date:'H:i' }}{% if session.location %} · {{ session.location }}{% endif %}</p>
+        </div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{% url 'report_signature_pdf' session.id %}" target="_blank"><i class="bi bi-printer"></i>Lista de assinatura (PDF)</a>
+    </div>
+  </div>
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <section class="panel">
+        <div class="panel-head"><h2>Leitor de QR Code</h2>{% if session.check_in_open and session.activity.status == 'PUBLISHED' %}<span class="pill pill-open">Check-in aberto</span>{% endif %}</div>
+        <div class="panel-body">
+        {% if session.activity.status != 'PUBLISHED' %}
+          <div class="alert alert-danger m-0">Check-in indisponível: a atividade está {{ session.activity.get_status_display|lower }}.</div>
+        {% elif session.check_in_open %}
+          <div id="reader" class="qr-reader"></div>
+          <div id="scan-result" class="alert alert-secondary mt-3 mb-0" role="status" aria-live="polite">Aponte a câmera para o QR Code do participante.</div>
+        {% else %}
+          <div class="alert alert-warning m-0">O check-in está fechado. <a href="{% url 'session_edit' session.id %}">Edite a sessão</a> e marque “check-in aberto”.</div>
+        {% endif %}
+        </div>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Inscritos</h2>
+          <span class="text-secondary tabular">Presentes: <strong id="present-count">{{ present|length }}</strong> / {{ registrations|length }}</span>
+        </div>
+        <div class="px-4 pt-3">
+          <input id="filter" class="form-control" placeholder="Buscar participante pelo nome ou e-mail" aria-label="Buscar participante">
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle" id="people">
+            <tbody>
+              {% for r in registrations %}
+                <tr>
+                  <td><strong class="fw-semibold">{{ r.user.get_full_name|default:r.user.username }}</strong><br><small class="text-secondary">{{ r.user.email }}</small></td>
+                  <td class="text-end" id="status-{{ r.id }}">
+                    {% if r.id in present %}
+                      <span class="pill pill-open"><i class="bi bi-check2" aria-hidden="true"></i>Presente</span>
+                    {% else %}
+                      <form method="post" action="{% url 'manual_checkin' session.id r.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-primary">Registrar</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td class="text-secondary">Sem inscritos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+{% if session.check_in_open and session.activity.status == 'PUBLISHED' %}
+<script src="{% static 'vendor/html5-qrcode/html5-qrcode.min.js' %}"></script>
+<script>
+  const result = document.getElementById('scan-result');
+  const counter = document.getElementById('present-count');
+  let locked = false;
+
+  function csrf() {
+    return document.cookie.split('; ').find(x => x.startsWith('csrftoken='))?.split('=')[1] || '';
+  }
+
+  function show(ok, text) {
+    result.className = 'alert mt-3 ' + (ok ? 'alert-success' : 'alert-danger');
+    result.textContent = text;
+  }
+
+  // Marca o participante como presente na tabela sem recarregar a página (a câmera continua ativa).
+  function markPresent(registrationId) {
+    const cell = document.getElementById('status-' + registrationId);
+    if (cell) cell.innerHTML = '<span class="pill pill-open"><i class="bi bi-check2" aria-hidden="true"></i>Presente</span>';
+  }
+
+  function scanned(text) {
+    if (locked) return;
+    locked = true;
+    fetch('{% url "qr_checkin" session.id %}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({token: text}),
+    })
+      .then(r => r.json())
+      .then(d => {
+        show(d.ok, (d.name ? d.name + ': ' : '') + d.message);
+        if (d.ok) {
+          markPresent(d.registration_id);
+          counter.textContent = d.present_count;
+        }
+      })
+      .catch(() => show(false, 'Erro ao registrar presença. Verifique a conexão.'))
+      .finally(() => setTimeout(() => { locked = false; }, 1500));
+  }
+
+  new Html5QrcodeScanner('reader', {fps: 10, qrbox: {width: 240, height: 240}}, false).render(scanned);
+</script>
+{% endif %}
+<script>
+  document.getElementById('filter').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('#people tbody tr').forEach(tr => {
+      tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

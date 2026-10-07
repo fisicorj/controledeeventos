@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Boa notícia: abriu uma vaga e sua inscrição foi confirmada.
+
+{% include 'emails/_activity_info.txt' %}
+O seu QR Code segue anexo. Ele também fica disponível em "Minhas inscrições": {{ my_registrations_url }}
+
+Se não puder mais participar, cancele a inscrição pelo mesmo link para liberar a vaga.
+
+{{ institution }}
+{% endautoescape %}

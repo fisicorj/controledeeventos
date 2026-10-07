@@ -1,0 +1,21 @@
+{% load ui %}
+{# Campos de um formulário com o visual do sistema. Uso: {% include 'core/_form.html' with form=form %} #}
+{% if form.non_field_errors %}<div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+<div class="form-fields">
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% for field in form.visible_fields %}
+    {% with kind=field|field_kind %}
+    <div class="field{% if kind == 'checkbox' %} form-check{% endif %}">
+      {% if kind == 'checkbox' %}
+        {{ field|styled }}
+        <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {% else %}
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+        {{ field|styled }}
+      {% endif %}
+      {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text|safe }}</div>{% endif %}
+      {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+    </div>
+    {% endwith %}
+  {% endfor %}
+</div>

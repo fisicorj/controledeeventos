@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Prévia da emissão | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a>{% if batch %} / <a href="{% url 'batch_detail' batch.pk %}">{{ batch.title }}</a>{% endif %}</div>
+    <h1>Conferir antes de emitir</h1>
+    <ol class="steps"><li class="done"><span class="dot"><i class="bi bi-check-lg"></i></span>{% if batch %}Planilha{% else %}Evento e planilha{% endif %}</li><li class="current"><span class="dot">2</span>Conferir a prévia</li><li><span class="dot">3</span>Emitir</li></ol>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <section class="panel h-100">
+        <div class="panel-head"><h2>Evento</h2></div>
+        <dl class="row mb-0 panel-body small">
+          {% if batch %}
+            <dt class="col-4">Título</dt><dd class="col-8 fw-semibold">{{ batch.title }}</dd>
+            <dt class="col-4">Período</dt><dd class="col-8">{{ batch.start_date|date:'d/m/Y' }}{% if batch.end_date != batch.start_date %} a {{ batch.end_date|date:'d/m/Y' }}{% endif %}</dd>
+            {% if batch.workload_hours %}<dt class="col-4">Carga horária</dt><dd class="col-8">{{ batch.workload_hours }} horas</dd>{% endif %}
+            <dt class="col-4">Data do certificado</dt><dd class="col-8">{{ batch.issue_date|date:'d/m/Y' }}</dd>
+          {% else %}
+            <dt class="col-4">Título</dt><dd class="col-8 fw-semibold">{{ event.title }}</dd>
+            <dt class="col-4">Tipo</dt><dd class="col-8">{{ event.type_label }}</dd>
+            <dt class="col-4">Período</dt><dd class="col-8">{{ event.start|date:'d/m/Y' }}{% if event.end != event.start %} a {{ event.end|date:'d/m/Y' }}{% endif %}</dd>
+            {% if event.workload_hours %}<dt class="col-4">Carga horária</dt><dd class="col-8">{{ event.workload_hours }} horas</dd>{% endif %}
+            <dt class="col-4">Data do certificado</dt><dd class="col-8">{{ event.issue|date:'d/m/Y' }}</dd>
+          {% endif %}
+          <dt class="col-4">Arquivo</dt><dd class="col-8 mb-0 text-break">{{ data.filename }}</dd>
+        </dl>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="panel h-100">
+        <div class="panel-head"><h2>Resumo</h2></div>
+        <div class="panel-body">
+          <div class="stat-row">
+            <div class="stat"><span class="stat-value text-success">{{ valid_count }}</span><span class="stat-label">serão emitidos</span></div>
+            <div class="stat"><span class="stat-value{% if error_count %} text-danger{% endif %}">{{ error_count }}</span><span class="stat-label">com problema (ficam de fora)</span></div>
+            <div class="stat"><span class="stat-value">{{ renamed_count }}</span><span class="stat-label">nomes ajustados</span></div>
+          </div>
+          {% if warning_count %}<p class="small text-secondary mt-3 mb-0"><i class="bi bi-exclamation-circle me-1"></i>{{ warning_count }} participante{{ warning_count|pluralize }} sem matrícula: o certificado sai sem esse dado.</p>{% endif %}
+          {% if not has_email %}<p class="small text-secondary mt-2 mb-0"><i class="bi bi-envelope me-1"></i>A planilha não tem coluna de e-mail: você distribui os certificados pelo ZIP ou pela lista de links.</p>{% endif %}
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel mb-4">
+    <div class="panel-head"><div><h2>Participantes ({{ rows|length }})</h2><p>Linhas em vermelho não serão emitidas. Corrija a planilha e envie de novo, se precisar.</p></div></div>
+    <div class="table-responsive">
+      <table class="table align-middle mb-0 preview-table">
+        <thead><tr><th class="text-secondary">Linha</th><th>Nome no certificado</th>{% if has_document %}<th>Matrícula</th>{% endif %}{% if has_group %}<th>Turma</th>{% endif %}{% if has_email %}<th>E-mail</th>{% endif %}<th>Situação</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+            <tr class="{% if r.errors %}row-error{% endif %}">
+              <td class="tabular text-secondary">{{ r.line }}</td>
+              <td>
+                <span class="fw-semibold">{{ r.name|default:'(vazio)' }}</span>
+                {% if r.name != r.original_name and r.original_name %}<div class="small text-secondary">na planilha: {{ r.original_name }}</div>{% endif %}
+              </td>
+              {% if has_document %}<td class="tabular">{{ r.document|default:'-' }}</td>{% endif %}
+              {% if has_group %}<td class="small">{{ r.group }}</td>{% endif %}
+              {% if has_email %}<td class="small text-break">{{ r.email }}</td>{% endif %}
+              <td>
+                {% for e in r.errors %}<span class="pill pill-danger">{{ e }}</span> {% empty %}
+                  {% for w in r.warnings %}<span class="pill pill-wait">{{ w }}</span> {% empty %}<span class="pill pill-open">Ok</span>{% endfor %}
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <form method="post" class="d-flex gap-2 justify-content-end flex-wrap">
+    {% csrf_token %}
+    <input type="hidden" name="token" value="{{ data.token }}">
+    <a class="btn btn-outline-secondary" href="{% if batch %}{% url 'batch_add' batch.pk %}{% else %}{% url 'batch_new' %}{% endif %}"><i class="bi bi-arrow-left"></i>Enviar outra planilha</a>
+    <button class="btn btn-primary"{% if not valid_count %} disabled{% endif %}><i class="bi bi-award"></i>Emitir {{ valid_count }} certificado{{ valid_count|pluralize }}</button>
+  </form>
+</main>
+{% endblock %}

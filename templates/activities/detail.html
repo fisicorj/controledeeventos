@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load ui %}
+{% block title %}{{ activity.title }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main>
+  <section class="event-hero">
+    {% if activity.image %}
+      <div class="event-hero-cover"><img src="{{ activity.image.url }}" alt=""></div>
+    {% else %}
+      <div class="event-hero-cover placeholder-cover"></div>
+    {% endif %}
+    <div class="container">
+      <div class="event-hero-body">
+        {% include 'core/_date.html' with date=activity.start_date size='lg' %}
+        <div class="pb-1">
+          <div class="d-flex gap-2 align-items-center flex-wrap mb-1">
+            <span class="type-label">{{ activity.get_activity_type_display }}</span>
+            {% with pill=activity.state_pill %}<span class="pill {{ pill.css }}">{{ pill.label }}</span>{% endwith %}
+          </div>
+          <h1 class="mb-0">{{ activity.title }}</h1>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="container py-4">
+    {% if is_preview %}
+      <div class="alert alert-warning flash">
+        <i class="bi bi-eye" aria-hidden="true"></i>
+        <div>Pré-visualização: esta atividade está <strong>{{ activity.get_status_display|lower }}</strong> e não aparece para os participantes. <a href="{% url 'activity_edit' activity.id %}">Editar</a></div>
+      </div>
+    {% endif %}
+    <div class="row g-4 g-lg-5">
+      <div class="col-lg-8">
+        <dl class="facts panel panel-body mb-4">
+          <div class="fact"><i class="bi bi-calendar-event" aria-hidden="true"></i><div><dt>Início</dt><dd>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</dd></div></div>
+          <div class="fact"><i class="bi bi-calendar-check" aria-hidden="true"></i><div><dt>Término</dt><dd>{{ activity.end_date|date:'d/m/Y \à\s H:i' }}</dd></div></div>
+          <div class="fact"><i class="bi bi-geo-alt" aria-hidden="true"></i><div><dt>Local</dt><dd>{{ activity.location|default:'A definir' }}</dd></div></div>
+          {% if activity.workload_hours %}<div class="fact"><i class="bi bi-hourglass-split" aria-hidden="true"></i><div><dt>Carga horária</dt><dd>{{ activity.workload_hours }} horas</dd></div></div>{% endif %}
+        </dl>
+
+        <h2 class="h4">Sobre</h2>
+        <div class="measure mb-4">{{ activity.description|linebreaks }}</div>
+
+        <h2 class="h4">Programação</h2>
+        <div class="panel panel-body py-2 mb-4">
+          <ul class="timeline">
+            {% for session in activity.sessions.all %}
+              <li>
+                {% include 'core/_date.html' with date=session.start_at size='sm' %}
+                <div>
+                  <strong>{{ session.title }}</strong>
+                  <div class="small text-secondary">{{ session.start_at|date:'H:i' }} até {{ session.end_at|date:'H:i' }}{% if session.location %} · {{ session.location }}{% endif %}</div>
+                </div>
+              </li>
+            {% empty %}
+              <li class="text-secondary">Programação ainda não cadastrada.</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="d-flex flex-column gap-2 small text-secondary">
+          {% if activity.certificate_enabled %}<span><i class="bi bi-award me-1" aria-hidden="true"></i>Certificado emitido para quem tiver pelo menos {{ activity.min_attendance_percent }}% de frequência.</span>{% endif %}
+          <span><i class="bi bi-calendar-range me-1" aria-hidden="true"></i>Inscrições de {{ activity.registration_start|date:'d/m/Y H:i' }} até {{ activity.registration_end|date:'d/m/Y H:i' }}.</span>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <aside class="panel panel-body signup-card" aria-labelledby="signup-title">
+          <h2 class="h5" id="signup-title">Inscrição</h2>
+          <div class="capacity my-2{% if activity.confirmed_count >= activity.capacity %} full{% endif %}" aria-hidden="true"><span style="width: {% widthratio activity.confirmed_count activity.capacity 100 %}%"></span></div>
+          <p class="mb-1 tabular">{{ activity.confirmed_count }} de {{ activity.capacity }} vagas preenchidas.</p>
+          {% if activity.waitlist_count %}<p class="small text-secondary">{{ activity.waitlist_count }} pessoa{{ activity.waitlist_count|pluralize }} na lista de espera.</p>{% endif %}
+
+          <div class="mt-3">
+          {% if state.code == 'registered' %}
+            <div class="alert alert-success flash"><i class="bi bi-check-circle" aria-hidden="true"></i><div>Você está inscrito.</div></div>
+            <a href="{% url 'my_registrations' %}" class="btn btn-primary w-100"><i class="bi bi-qr-code"></i>Ver meu QR Code</a>
+          {% elif state.code == 'waitlisted' %}
+            <div class="alert alert-warning flash"><i class="bi bi-hourglass-split" aria-hidden="true"></i><div>Você está na lista de espera, na posição <strong>{{ state.position }}</strong>. Avisaremos por e-mail se abrir uma vaga.</div></div>
+            <a href="{% url 'my_registrations' %}" class="btn btn-outline-primary w-100">Minhas inscrições</a>
+          {% elif state.code == 'blocked' %}
+            <button class="btn btn-secondary w-100" disabled>Inscrições indisponíveis</button>
+            <p class="small text-secondary mt-2 mb-0">{{ state.reason }}</p>
+          {% elif user.is_authenticated %}
+            {% if state.code == 'waitlist' %}
+              <p class="small text-secondary">As vagas estão esgotadas. Se alguém cancelar, a vaga passa automaticamente para o próximo da fila.</p>
+            {% endif %}
+            <form method="post" action="{% url 'register_activity' activity.pk %}" novalidate>
+              {% csrf_token %}
+              {% for field in answers_form %}
+                <div class="mb-3">
+                  <label class="form-label small" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+                  {{ field|styled }}
+                  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+              {% endfor %}
+              {% if state.code == 'waitlist' %}
+                <button class="btn btn-accent w-100 py-2">Entrar na lista de espera</button>
+              {% else %}
+                <button class="btn btn-primary w-100 py-2">Inscrever-se</button>
+              {% endif %}
+            </form>
+          {% else %}
+            <a href="{% url 'login' %}?next={{ request.path|urlencode }}" class="btn btn-primary w-100 py-2">Entrar para se inscrever</a>
+            <p class="small text-secondary mt-2 mb-0 text-center">Ainda não tem conta? <a href="{% url 'signup' %}">Crie uma</a>.</p>
+          {% endif %}
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

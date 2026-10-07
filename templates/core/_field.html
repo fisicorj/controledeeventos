@@ -1,0 +1,15 @@
+{% load ui %}
+{% with kind=field|field_kind %}
+<div class="mb-3{% if kind == 'checkbox' %} form-check{% endif %}">
+  {% if kind == 'checkbox' %}
+    {{ field|styled }}
+    <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+  {% else %}
+    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {% if image %}<div class="mb-2"><img src="{{ image.url }}" alt="" style="max-height:70px;max-width:260px" class="border rounded p-1 bg-white"></div>{% endif %}
+    {{ field|styled }}
+  {% endif %}
+  {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+</div>
+{% endwith %}

@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Editar evento | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:860px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a> / <a href="{% url 'batch_detail' batch.pk %}">{{ batch.title }}</a></div>
+    <h1>Editar dados do evento</h1>
+  </div>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Os certificados já emitidos passam a mostrar os novos dados, inclusive na página de validação. Os códigos e os QR Codes não mudam.</div>
+    <section class="panel mb-4">
+      <div class="panel-body">
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="row g-3">
+          <div class="col-md-8">{% include 'core/_field.html' with field=form.title %}</div>
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.activity_type %}</div>
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.start_date %}</div>
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.end_date %}</div>
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.workload_hours %}</div>
+          <div class="col-md-4">
+            {% include 'core/_field.html' with field=form.issue_date %}
+            <div class="d-flex gap-3 small" style="margin-top:-0.6rem">
+              <a href="#" data-copy-date="#id_end_date" data-to="#id_issue_date">Usar o último dia do evento</a>
+              <a href="#" data-today data-to="#id_issue_date">Hoje</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="d-flex gap-2 justify-content-end">
+      <a class="btn btn-outline-secondary" href="{% url 'batch_detail' batch.pk %}">Cancelar</a>
+      <button class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</main>
+{% endblock %}
+{% block scripts %}{% include 'certificates/_date_shortcuts.html' %}{% endblock %}

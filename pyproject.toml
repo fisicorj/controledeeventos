@@ -1,0 +1,16 @@
+# Padrão de código do projeto. Uso:
+#   ruff check .     (aponta problemas)
+#   ruff format .    (formata)
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["*/migrations/*", "staticfiles", "media"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["accounts", "activities", "attendance", "config", "registrations"]

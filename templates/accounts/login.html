@@ -1,0 +1,14 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Entrar | {{ portal.portal_name }}{% endblock %}
+{% block heading %}Entrar{% endblock %}
+{% block intro %}<p class="text-secondary">Use seu usuário e senha do {{ portal.portal_name }}.</p>{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'core/_form.html' with form=form %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  <div class="d-flex justify-content-end mt-2 mb-3"><a class="small" href="{% url 'password_reset' %}">Esqueceu a senha?</a></div>
+  <button class="btn btn-primary w-100 py-2">Entrar</button>
+</form>
+<p class="mt-4 mb-0 text-center text-secondary">Ainda não possui conta? <a href="{% url 'signup' %}">Cadastre-se</a>.</p>
+{% endblock %}

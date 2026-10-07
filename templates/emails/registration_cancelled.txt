@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if was_waitlisted %}Você saiu da lista de espera de "{{ activity.title }}".{% else %}Sua inscrição em "{{ activity.title }}" foi cancelada, e o QR Code deixou de valer.{% endif %}
+
+Se mudar de ideia, você pode se inscrever de novo enquanto as inscrições estiverem abertas: {{ activity_url }}
+
+{{ institution }}
+{% endautoescape %}

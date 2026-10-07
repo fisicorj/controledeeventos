@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block footer %}{% endblock %}
+{% block content %}
+<main class="auth-wrap">
+  <section class="auth-side">
+    <div>
+      {% if portal.logo %}<span class="auth-logo"><img src="{{ portal.logo.url }}" alt="{{ portal.institution_name }}"></span>{% endif %}
+    </div>
+    <div class="auth-extra">
+      <h2>{% block side_title %}Cursos, eventos e palestras em um só lugar{% endblock %}</h2>
+      <p class="mt-3 mb-0">{% block side_text %}Inscrição online, QR Code para a presença e certificado com validação pública.{% endblock %}</p>
+    </div>
+    <div class="small opacity-75">{{ portal.institution_name }}</div>
+  </section>
+  <section class="auth-main">
+    <div class="auth-form">
+      <h1 class="h2 mb-1">{% block heading %}{% endblock %}</h1>
+      {% block intro %}{% endblock %}
+      <div class="mt-4">{% block form %}{% endblock %}</div>
+    </div>
+  </section>
+</main>
+{% endblock %}

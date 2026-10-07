@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}{{ heading|default:"Excluir atividade" }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="panel panel-body my-5">
+  <div class="avatar mb-3" style="width:48px;height:48px;font-size:1.3rem"><i class="bi bi-trash" aria-hidden="true"></i></div>
+  <h1 class="h2">{{ heading|default:"Excluir atividade" }}</h1>
+  <p>Confirma a exclusão de <strong>{{ object }}</strong>?</p>
+  {% if warning %}<div class="alert alert-warning">{{ warning }}</div>{% endif %}
+  <form method="post" class="d-flex gap-2 mt-3">
+    {% csrf_token %}
+    <button class="btn btn-danger">Excluir</button>
+    <a class="btn btn-outline-secondary" href="{% if cancel_url %}{{ cancel_url }}{% else %}{% url 'organizer_dashboard' %}{% endif %}">Cancelar</a>
+  </form>
+  </div>
+</main>
+{% endblock %}

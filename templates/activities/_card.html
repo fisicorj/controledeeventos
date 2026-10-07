@@ -1,0 +1,27 @@
+<div class="col-md-6 col-lg-4">
+  <article class="event-card">
+    {% if activity.image %}
+      <div class="event-cover"><img src="{{ activity.image.url }}" alt="" loading="lazy">{% include 'core/_date.html' with date=activity.start_date %}</div>
+    {% else %}
+      <div class="event-cover placeholder-cover">
+        <i class="bi {% if activity.activity_type == 'COURSE' %}bi-mortarboard{% elif activity.activity_type == 'EVENT' %}bi-megaphone{% else %}bi-calendar2-week{% endif %}" aria-hidden="true"></i>
+        {% include 'core/_date.html' with date=activity.start_date %}
+      </div>
+    {% endif %}
+    <div class="event-body">
+      <div class="d-flex justify-content-between align-items-center gap-2">
+        <span class="type-label">{{ activity.get_activity_type_display }}</span>
+        {% with pill=activity.state_pill %}<span class="pill {{ pill.css }}">{{ pill.label }}</span>{% endwith %}
+      </div>
+      <h3 class="event-title"><a href="{% url 'activity_detail' activity.pk %}" class="stretched-link">{{ activity.title }}</a></h3>
+      <ul class="event-meta">
+        <li><i class="bi bi-clock" aria-hidden="true"></i>{{ activity.start_date|date:'d/m \à\s H:i' }}{% if activity.end_date|date:'Ymd' != activity.start_date|date:'Ymd' %} até {{ activity.end_date|date:'d/m' }}{% endif %}</li>
+        {% if activity.location %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i>{{ activity.location }}</li>{% endif %}
+      </ul>
+      <div class="event-foot">
+        <div class="capacity{% if activity.confirmed_count >= activity.capacity %} full{% endif %}" aria-hidden="true"><span style="width: {% widthratio activity.confirmed_count activity.capacity 100 %}%"></span></div>
+        <span class="capacity-text">{{ activity.confirmed_count }}/{{ activity.capacity }} inscrições{% if activity.confirmed_count >= activity.capacity %} <span class="visually-hidden">(Esgotado)</span>{% endif %}</span>
+      </div>
+    </div>
+  </article>
+</div>

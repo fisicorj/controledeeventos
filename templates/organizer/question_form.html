@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}{{ heading|default:"Nova pergunta" }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>{{ heading|default:"Nova pergunta" }}</h1>
+    <p>O participante responde ao se inscrever. As respostas saem na planilha de inscritos.</p>
+  </div>
+  {% if answered %}<div class="alert alert-warning flash"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>Esta pergunta já tem respostas. Mudar o texto ou as opções não altera o que já foi respondido.</div></div>{% endif %}
+  <form method="post" class="panel panel-body" novalidate>
+    {% csrf_token %}
+    {% include 'core/_form.html' with form=form %}
+    <div class="d-flex gap-2 mt-4">
+      <button class="btn btn-primary px-4">Salvar pergunta</button>
+      <a class="btn btn-outline-secondary" href="{% url 'activity_manage' activity.id %}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

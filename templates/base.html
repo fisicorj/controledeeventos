@@ -1,0 +1,108 @@
+{% load static ui %}<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ portal.portal_name }}{% endblock %}</title>
+  <meta name="theme-color" content="{{ portal.safe_primary_color }}">
+  {% if portal.logo %}<link rel="icon" href="{{ portal.logo.url }}">{% endif %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" href="{% static 'vendor/public-sans/public-sans.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <style>:root { --brand: {{ portal.safe_primary_color }}; --brand-rgb: {{ portal.primary_rgb }}; --brand-contrast: {{ portal.primary_contrast }}; }</style>
+</head>
+<body>
+  {% with url_name=request.resolver_match.url_name %}
+  <header class="site-header">
+    <nav class="navbar navbar-expand-lg" aria-label="Navegação principal">
+      <div class="container">
+        <a class="brand" href="{% url 'home' %}">
+          {% if portal.logo %}
+            <img src="{{ portal.logo.url }}" alt="{{ portal.institution_name }}" class="brand-logo">
+            <span class="brand-divider d-none d-sm-block"></span>
+          {% else %}
+            <span class="brand-mark" aria-hidden="true">{{ portal.portal_name|slice:":1" }}</span>
+          {% endif %}
+          <span class="brand-name d-none d-sm-block">{{ portal.portal_name }}</span>
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+          <ul class="navbar-nav site-nav ms-lg-4 me-auto gap-lg-1">
+            <li class="nav-item"><a class="nav-link{% if url_name == 'activity_list' or url_name == 'activity_detail' %} active{% endif %}" href="{% url 'activity_list' %}">Atividades</a></li>
+            {% if user.is_authenticated %}
+              <li class="nav-item"><a class="nav-link{% if url_name == 'my_registrations' %} active{% endif %}" href="{% url 'my_registrations' %}">Minhas inscrições</a></li>
+              {% if user.is_superuser or user.role == 'ADMIN' or user.role == 'ORGANIZER' %}
+                <li class="nav-item"><a class="nav-link{% if url_name == 'organizer_dashboard' or 'organizer' in request.path or '/avulsos/' in request.path %} active{% endif %}" href="{% url 'organizer_dashboard' %}">Painel do organizador</a></li>
+              {% endif %}
+              {% if user.is_superuser or user.role == 'ADMIN' %}
+                <li class="nav-item"><a class="nav-link{% if '/configuracoes/' in request.path or '/auditoria/' in request.path %} active{% endif %}" href="{% url 'site_settings' %}">Configurações</a></li>
+              {% endif %}
+            {% endif %}
+          </ul>
+          <div class="d-flex align-items-center gap-2 py-2 py-lg-0">
+            {% if user.is_authenticated %}
+              <div class="dropdown">
+                <a class="user-toggle dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="avatar" aria-hidden="true">{{ user|initials }}</span>
+                  <span>{{ user.first_name|default:user.username }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item" href="{% url 'my_registrations' %}"><i class="bi bi-ticket-perforated"></i>Minhas inscrições</a></li>
+                  <li><a class="dropdown-item" href="{% url 'password_reset' %}"><i class="bi bi-key"></i>Trocar senha</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <form method="post" action="{% url 'logout' %}">
+                      {% csrf_token %}
+                      <button class="dropdown-item"><i class="bi bi-box-arrow-right"></i>Sair</button>
+                    </form>
+                  </li>
+                </ul>
+              </div>
+            {% else %}
+              <a class="btn btn-outline-secondary btn-sm" href="{% url 'login' %}">Entrar</a>
+              <a class="btn btn-primary btn-sm" href="{% url 'signup' %}">Criar conta</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+  {% endwith %}
+
+  {% if messages %}
+    <div class="container mt-3">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} flash alert-dismissible fade show" role="alert">
+          <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'danger' %}bi-exclamation-octagon{% elif message.tags == 'warning' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %}" aria-hidden="true"></i>
+          <div>{{ message }}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  {% block footer %}
+  <footer class="site-footer">
+    <div class="container d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div class="d-flex align-items-center gap-2">
+        {% if portal.logo %}<img src="{{ portal.logo.url }}" alt="" class="footer-logo">{% endif %}
+        <span>{{ portal.institution_name }}</span>
+      </div>
+      <div class="d-flex gap-3">
+        <a href="{% url 'activity_list' %}">Atividades</a>
+        <a href="{% url 'certificate_verify' %}">Validar certificado</a>
+      </div>
+    </div>
+  </footer>
+  {% endblock %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

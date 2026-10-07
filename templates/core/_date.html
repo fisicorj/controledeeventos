@@ -1,0 +1,6 @@
+{# Bloco de data. Uso: {% include 'core/_date.html' with date=activity.start_date size='sm' %} #}
+<span class="date-block{% if size %} {{ size }}{% endif %}" aria-label="{{ date|date:'j \d\e F' }}">
+  <span class="month" aria-hidden="true">{{ date|date:'b' }}</span>
+  <span class="day" aria-hidden="true">{{ date|date:'d' }}</span>
+  {% if size != 'sm' %}<span class="weekday" aria-hidden="true">{{ date|date:'D' }}</span>{% endif %}
+</span>

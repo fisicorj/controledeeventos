@@ -1,0 +1,15 @@
+{# Atalhos "Usar o último dia do evento" e "Hoje" do campo Data do certificado #}
+<script>
+  document.querySelectorAll('[data-to]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    const target = document.querySelector(link.dataset.to);
+    if (link.dataset.copyDate) {
+      const source = document.querySelector(link.dataset.copyDate);
+      if (source && source.value) target.value = source.value;
+    } else {
+      const d = new Date();
+      target.value = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+    }
+    target.dispatchEvent(new Event('change'));
+  }));
+</script>

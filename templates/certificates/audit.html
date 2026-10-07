@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Auditoria de certificados | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <h1>Configurações</h1>
+  </div>
+  {% include 'core/_tabs.html' with active='audit' %}
+  <div class="d-flex justify-content-between align-items-end flex-wrap gap-3 mb-3">
+    <div>
+      <h2 class="h4 mb-1">Auditoria de certificados</h2>
+      <p class="text-secondary mb-0 small">Toda emissão, alteração, revogação, envio por e-mail e download feito pela equipe. O registro é permanente: não pode ser alterado nem apagado, nem pelo banco de dados.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'certificate_audit_csv' %}{% if querystring %}?{{ querystring }}{% endif %}"><i class="bi bi-filetype-csv"></i>Exportar CSV</a>
+  </div>
+
+  <form method="get" class="panel panel-body mb-4">
+    {{ form.lote }}
+    {% if batch %}<div class="alert alert-info small py-2">Mostrando só a emissão avulsa <strong>{{ batch.title }}</strong>. <a href="{% url 'certificate_audit' %}">Ver todas</a></div>{% endif %}
+    <div class="row g-3 align-items-end">
+      <div class="col-lg-4">{% include 'core/_field.html' with field=form.q %}</div>
+      <div class="col-sm-6 col-lg-2">{% include 'core/_field.html' with field=form.acao %}</div>
+      <div class="col-sm-6 col-lg-2">{% include 'core/_field.html' with field=form.de %}</div>
+      <div class="col-sm-6 col-lg-2">{% include 'core/_field.html' with field=form.ate %}</div>
+      <div class="col-sm-6 col-lg-2">{% include 'core/_field.html' with field=form.usuario %}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary"><i class="bi bi-funnel"></i>Filtrar</button>
+      <a class="btn btn-outline-secondary" href="{% url 'certificate_audit' %}">Limpar</a>
+    </div>
+  </form>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ total }} registro{{ total|pluralize }}</h2></div>
+    {% include 'certificates/_events.html' with events=page.object_list %}
+  </section>
+
+  {% if page.paginator.num_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center mt-3 small" aria-label="Páginas">
+      <span class="text-secondary">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+      <div class="d-flex gap-2">
+        {% if page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}pagina={{ page.previous_page_number }}">Anterior</a>{% endif %}
+        {% if page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}pagina={{ page.next_page_number }}">Próxima</a>{% endif %}
+      </div>
+    </nav>
+  {% endif %}
+</main>
+{% endblock %}

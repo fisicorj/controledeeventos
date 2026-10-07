@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}{{ heading }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'organizer_dashboard' %}">Painel do organizador</a>{% if activity %} / <a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a>{% endif %}</div>
+    <h1>{{ heading }}</h1>
+  </div>
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Informações</h2></div>
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-md-8">{% include 'core/_field.html' with field=form.title %}</div>
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.activity_type %}</div>
+        </div>
+        {% include 'core/_field.html' with field=form.description %}
+        <div class="row g-3">
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.location %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.image %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Datas</h2><p>O período de inscrição precisa terminar até o fim da atividade.</p></div></div>
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.start_date %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.end_date %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.registration_start %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.registration_end %}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Vagas e publicação</h2></div>
+      <div class="panel-body">
+        <div class="row g-3">
+          <div class="col-md-4">{% include 'core/_field.html' with field=form.capacity %}</div>
+          <div class="col-md-8">{% include 'core/_field.html' with field=form.status %}</div>
+        </div>
+        {% include 'core/_field.html' with field=form.waitlist_enabled %}
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Certificado</h2></div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=form.certificate_enabled %}
+        <div class="row g-3">
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.workload_hours %}</div>
+          <div class="col-md-6">{% include 'core/_field.html' with field=form.min_attendance_percent %}</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="d-flex gap-2 mb-4">
+      <button class="btn btn-primary px-4">Salvar</button>
+      <a class="btn btn-outline-secondary" href="{% if activity %}{% url 'activity_manage' activity.id %}{% else %}{% url 'organizer_dashboard' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Informamos que a atividade "{{ activity.title }}", prevista para {{ activity.start_date|date:'d/m/Y \à\s H:i' }}, foi cancelada pela organização.
+
+Sua inscrição não precisa de nenhuma ação. Pedimos desculpas pelo transtorno.
+
+{{ institution }}
+{% endautoescape %}

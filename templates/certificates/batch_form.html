@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}{% if batch %}Adicionar participantes{% else %}Nova emissão avulsa{% endif %} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a>{% if batch %} / <a href="{% url 'batch_detail' batch.pk %}">{{ batch.title }}</a>{% endif %}</div>
+    <h1>{% if batch %}Adicionar participantes{% else %}Nova emissão avulsa{% endif %}</h1>
+    <ol class="steps"><li class="current"><span class="dot">1</span>{% if batch %}Planilha{% else %}Evento e planilha{% endif %}</li><li><span class="dot">2</span>Conferir a prévia</li><li><span class="dot">3</span>Emitir</li></ol>
+  </div>
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% if event_form %}
+      <section class="panel mb-4">
+        <div class="panel-head"><div><h2>Evento</h2><p>Esses dados aparecem no certificado de todos os participantes.</p></div></div>
+        <div class="panel-body">
+          {% if event_form.non_field_errors %}<div class="alert alert-danger">{{ event_form.non_field_errors }}</div>{% endif %}
+          <div class="row g-3">
+            <div class="col-md-8">{% include 'core/_field.html' with field=event_form.title %}</div>
+            <div class="col-md-4">{% include 'core/_field.html' with field=event_form.activity_type %}</div>
+            <div class="col-md-4">{% include 'core/_field.html' with field=event_form.start_date %}</div>
+            <div class="col-md-4">{% include 'core/_field.html' with field=event_form.end_date %}</div>
+            <div class="col-md-4">{% include 'core/_field.html' with field=event_form.workload_hours %}</div>
+            <div class="col-md-4">
+              {% include 'core/_field.html' with field=event_form.issue_date %}
+              <div class="d-flex gap-3 small" style="margin-top:-0.6rem">
+                <a href="#" data-copy-date="#id_end_date" data-to="#id_issue_date">Usar o último dia do evento</a>
+                <a href="#" data-today data-to="#id_issue_date">Hoje</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% else %}
+      <div class="alert alert-info small"><i class="bi bi-info-circle me-1"></i>Quem já tem certificado neste lote (mesma matrícula, ou mesmo nome quando não há matrícula) é ignorado.</div>
+    {% endif %}
+    <section class="panel mb-4">
+      <div class="panel-head">
+        <div><h2>Participantes</h2><p>As colunas são reconhecidas pelo cabeçalho; a ordem não importa.</p></div>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'batch_template' %}"><i class="bi bi-file-earmark-spreadsheet"></i>Baixar planilha modelo</a>
+      </div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=sheet_form.spreadsheet %}
+        {% include 'core/_field.html' with field=sheet_form.fix_case %}
+        <div class="small text-secondary">
+          <strong>Colunas reconhecidas:</strong> Nome (obrigatória) · Matrícula ou RA · Turma · E-mail (para enviar o certificado por e-mail).
+        </div>
+      </div>
+    </section>
+    <div class="d-flex gap-2 justify-content-end">
+      <a class="btn btn-outline-secondary" href="{% if batch %}{% url 'batch_detail' batch.pk %}{% else %}{% url 'batch_list' %}{% endif %}">Cancelar</a>
+      <button class="btn btn-primary">Ver prévia<i class="bi bi-arrow-right ms-1 me-0"></i></button>
+    </div>
+  </form>
+</main>
+{% endblock %}
+{% block scripts %}{% include 'certificates/_date_shortcuts.html' %}{% endblock %}

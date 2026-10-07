@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Lembrete: a atividade em que você está inscrito começa em breve.
+
+{% include 'emails/_activity_info.txt' %}
+O seu QR Code segue anexo. Leve-o no celular ou impresso.
+
+Se não puder comparecer, cancele a inscrição em "Minhas inscrições" para liberar a vaga: {{ my_registrations_url }}
+
+{{ institution }}
+{% endautoescape %}

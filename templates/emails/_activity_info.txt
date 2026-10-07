@@ -1,0 +1,5 @@
+{{ activity.title }}
+Início: {{ activity.start_date|date:'d/m/Y \à\s H:i' }}
+Término: {{ activity.end_date|date:'d/m/Y \à\s H:i' }}
+Local: {{ activity.location|default:'a definir' }}
+Página da atividade: {{ activity_url }}

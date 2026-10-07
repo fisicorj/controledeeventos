@@ -1,0 +1,10 @@
+{% autoescape off %}Olá, {{ name }}.
+
+As vagas de "{{ activity.title }}" estão esgotadas, e você entrou na lista de espera na posição {{ position }}.
+
+Se alguém cancelar, a vaga é passada automaticamente para o próximo da fila. Quando chegar a sua vez, você recebe um e-mail de confirmação com o QR Code.
+
+Acompanhe em "Minhas inscrições": {{ my_registrations_url }}
+
+{{ institution }}
+{% endautoescape %}

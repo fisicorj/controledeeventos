@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Painel do organizador | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h1>Painel do organizador</h1>
+      <p>Gerencie atividades, inscritos e presenças.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-primary" href="{% url 'batch_list' %}" title="Certificados de eventos que não foram cadastrados no sistema"><i class="bi bi-award"></i>Emissão avulsa de certificados</a>
+      <a class="btn btn-primary" href="{% url 'activity_create' %}"><i class="bi bi-plus-lg"></i>Nova atividade</a>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Atividade</th><th>Status</th><th>Inscritos</th><th>Vagas</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+        <tbody>
+          {% for a in activities %}
+            <tr>
+              <td>
+                <div class="d-flex gap-3 align-items-center">
+                  {% include 'core/_date.html' with date=a.start_date size='sm' %}
+                  <div>
+                    <a class="fw-semibold text-reset text-decoration-none" href="{% url 'activity_manage' a.id %}">{{ a.title }}</a>
+                    <div class="small text-secondary">{{ a.get_activity_type_display }} · {{ a.start_date|date:'d/m/Y' }}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="pill {% if a.status == 'PUBLISHED' %}pill-open{% elif a.status == 'DRAFT' %}pill-soon{% elif a.status == 'CANCELLED' %}pill-danger{% else %}pill-muted{% endif %}">{{ a.get_status_display }}</span></td>
+              <td style="min-width:140px">
+                <div class="capacity mb-1" aria-hidden="true"><span style="width: {% widthratio a.confirmed_count a.capacity 100 %}%"></span></div>
+                <span class="capacity-text">{{ a.confirmed_count }}{% if a.waitlist_count %} + {{ a.waitlist_count }} na fila{% endif %}</span>
+              </td>
+              <td class="tabular">{{ a.capacity }}</td>
+              <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'activity_manage' a.id %}">Gerenciar</a>
+                <div class="btn-group">
+                  <button class="btn btn-sm btn-outline-secondary btn-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais ações para {{ a.title }}"><i class="bi bi-three-dots"></i></button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{% url 'activity_detail' a.id %}"><i class="bi bi-eye"></i>{% if a.status == 'PUBLISHED' %}Ver{% else %}Pré-visualizar{% endif %}</a></li>
+                    <li><a class="dropdown-item" href="{% url 'activity_edit' a.id %}"><i class="bi bi-pencil"></i>Editar</a></li>
+                    {% if not a.registration_total %}
+                      <li><a class="dropdown-item text-danger" href="{% url 'activity_delete' a.id %}"><i class="bi bi-trash"></i>Excluir</a></li>
+                    {% elif a.status != 'CANCELLED' %}
+                      <li><a class="dropdown-item text-danger" href="{% url 'activity_cancel' a.id %}"><i class="bi bi-x-circle"></i>Cancelar</a></li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5"><div class="empty-state"><i class="bi bi-calendar-plus"></i>Nenhuma atividade ainda. <a href="{% url 'activity_create' %}">Criar a primeira</a></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+{% endblock %}

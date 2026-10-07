@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}{{ batch.title }} | Emissão avulsa{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a></div>
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+      <div>
+        <h1 class="mb-1">{{ batch.title }}</h1>
+        <div class="small text-secondary">
+          {{ batch.get_activity_type_display }} · {{ batch.start_date|date:'d/m/Y' }}{% if batch.end_date != batch.start_date %} a {{ batch.end_date|date:'d/m/Y' }}{% endif %}{% if batch.workload_hours %} · {{ batch.workload_hours }} horas{% endif %}
+          · certificados datados de {{ batch.issue_date|date:'d/m/Y' }}
+          · gerado por {{ batch.created_by.get_full_name|default:batch.created_by.username }} em {{ batch.created_at|date:'d/m/Y' }}
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-primary{% if not certificates %} disabled{% endif %}" href="{% url 'batch_zip' batch.pk %}"><i class="bi bi-file-earmark-zip"></i>Baixar todos (ZIP)</a>
+        <div class="btn-group">
+          <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Mais</button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{% url 'batch_csv' batch.pk %}"><i class="bi bi-filetype-csv"></i>Lista com códigos e links (CSV/Excel)</a></li>
+            {% if not batch.is_cancelled %}
+              <li><a class="dropdown-item" href="{% url 'batch_add' batch.pk %}"><i class="bi bi-person-plus"></i>Adicionar participantes</a></li>
+              <li><a class="dropdown-item" href="{% url 'batch_edit' batch.pk %}"><i class="bi bi-pencil"></i>Editar dados do evento</a></li>
+            {% endif %}
+            {% if user.is_superuser or user.role == 'ADMIN' %}
+              <li><a class="dropdown-item" href="{% url 'certificate_audit' %}?lote={{ batch.pk }}"><i class="bi bi-journal-text"></i>Auditoria completa do lote</a></li>
+            {% endif %}
+            {% if not batch.is_cancelled %}
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="{% url 'batch_cancel' batch.pk %}"><i class="bi bi-x-octagon"></i>Cancelar emissão</a></li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if batch.is_cancelled %}
+    <div class="alert alert-danger"><i class="bi bi-x-octagon me-1"></i>Emissão cancelada em {{ batch.cancelled_at|date:'d/m/Y H:i' }} por {{ batch.cancelled_by.get_full_name|default:batch.cancelled_by.username }}. Motivo: {{ batch.cancel_reason }}. Os certificados aparecem como revogados na validação.</div>
+  {% endif %}
+
+  {% if with_email and not batch.is_cancelled %}
+    <section class="panel mb-4">
+      <div class="panel-head">
+        <div>
+          <h2>Envio por e-mail</h2>
+          <p>{{ with_email }} participante{{ with_email|pluralize }} com e-mail na planilha · {% if pending_email %}{{ pending_email }} ainda não recebe{{ pending_email|pluralize:"u,ram" }}{% else %}todos já receberam{% endif %}. O PDF vai anexado.</p>
+        </div>
+        {% if email_enabled %}
+          <div class="d-flex gap-2 flex-wrap">
+            {% if pending_email %}
+              <form method="post" action="{% url 'batch_email' batch.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm"><i class="bi bi-send"></i>Enviar para {{ pending_email }} pendente{{ pending_email|pluralize }}</button></form>
+            {% endif %}
+            {% if pending_email != with_email %}
+              <form method="post" action="{% url 'batch_email' batch.pk %}">{% csrf_token %}<input type="hidden" name="resend" value="1"><button class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-repeat"></i>Reenviar para todos</button></form>
+            {% endif %}
+          </div>
+        {% else %}
+          <span class="small text-secondary">O envio de e-mails está desligado.{% if user.is_superuser or user.role == 'ADMIN' %} <a href="{% url 'email_settings' %}">Configurar</a>{% endif %}</span>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2>Certificados ({{ certificates|length }})</h2><p>Cada um tem um código e um QR Code que levam à página de validação.</p></div>
+      {% if not batch.is_cancelled %}<a class="btn btn-sm btn-outline-primary" href="{% url 'batch_add' batch.pk %}"><i class="bi bi-person-plus"></i>Adicionar participantes</a>{% endif %}
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr><th>Nome</th><th>Matrícula</th>{% if has_group %}<th>Turma</th>{% endif %}{% if with_email %}<th>E-mail</th>{% endif %}<th>Código</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+        <tbody>
+          {% for c in certificates %}
+            <tr>
+              <td class="fw-semibold">{{ c.participant_name }}</td>
+              <td class="tabular">{{ c.participant_document|default:'-' }}</td>
+              {% if has_group %}<td class="small">{{ c.participant_group }}</td>{% endif %}
+              {% if with_email %}<td class="small">{{ c.participant_email }}{% if c.emailed_at %} <i class="bi bi-check2-circle text-success" title="Enviado em {{ c.emailed_at|date:'d/m/Y H:i' }}"></i><span class="visually-hidden">enviado</span>{% endif %}</td>{% endif %}
+              <td><a class="tabular small" href="{% url 'certificate_verify_code' c.code %}" target="_blank">{{ c.code }}</a></td>
+              <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'certificate_download' c.code %}" target="_blank"><i class="bi bi-filetype-pdf"></i>PDF</a>
+<a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'batch_certificate_revoke' batch.pk c.code %}" aria-label="Revogar certificado de {{ c.participant_name }}" title="Revogar"><i class="bi bi-x-octagon"></i></a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6"><div class="empty-state"><i class="bi bi-people"></i>Nenhum certificado válido neste lote.{% if not batch.is_cancelled %} <a href="{% url 'batch_add' batch.pk %}">Adicionar participantes</a>{% endif %}</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <p class="small text-secondary mt-3"><i class="bi bi-info-circle me-1"></i>Nome errado? Revogue o certificado (informando o motivo) e adicione a pessoa de novo com a planilha corrigida. Ela recebe um código novo; o antigo passa a aparecer como revogado na validação.</p>
+
+  {% if revoked %}
+    <section class="panel mt-4">
+      <div class="panel-head"><div><h2>Revogados ({{ revoked|length }})</h2><p>Continuam guardados. Quem validar o código vê que foram revogados.</p></div></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Nome</th><th>Matrícula</th><th>Código</th><th>Revogado em</th><th>Motivo</th></tr></thead>
+          <tbody>
+            {% for c in revoked %}
+              <tr class="text-secondary">
+                <td>{{ c.participant_name }}</td>
+                <td class="tabular">{{ c.participant_document|default:'-' }}</td>
+                <td><a class="tabular small" href="{% url 'certificate_verify_code' c.code %}" target="_blank">{{ c.code }}</a></td>
+                <td class="small text-nowrap">{{ c.revoked_at|date:'d/m/Y H:i' }}<div>{{ c.revoked_by.get_full_name|default:c.revoked_by.username }}</div></td>
+                <td class="small">{{ c.revoked_reason }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel mt-4">
+    <div class="panel-head">
+      <div><h2>Histórico</h2><p>Registro permanente das ações neste lote. Não pode ser alterado nem apagado.</p></div>
+      {% if user.is_superuser or user.role == 'ADMIN' %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'certificate_audit' %}?lote={{ batch.pk }}"><i class="bi bi-journal-text"></i>Ver tudo</a>{% endif %}
+    </div>
+    {% include 'certificates/_events.html' with events=events compact=True %}
+  </section>
+</main>
+{% endblock %}

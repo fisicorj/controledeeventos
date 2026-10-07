@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<main>
+  <section class="hero">
+    <div class="container">
+      <div class="row g-5 align-items-center">
+        <div class="col-lg-7">
+          <h1>Cursos, eventos e palestras {% if portal.institution_name %}da {{ portal.institution_name }}{% endif %}</h1>
+          <p class="lead mt-3">Inscreva-se online, receba seu QR Code por e-mail e use-o na entrada. Ao final, o certificado sai aqui mesmo.</p>
+          <form class="search-box mt-4" action="{% url 'activity_list' %}" method="get" role="search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input class="form-control" type="search" name="q" placeholder="Buscar por tema, palavra ou local" aria-label="Buscar atividades">
+            <button class="btn btn-primary px-4">Buscar</button>
+          </form>
+          <div class="chips mt-3">
+            {% for value, label in types %}<a class="chip" href="{% url 'activity_list' %}?tipo={{ value }}">{{ label }}{% if label != 'Agenda' %}s{% endif %}</a>{% endfor %}
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="agenda">
+            <div class="agenda-head"><span>Agenda</span><a class="small fw-semibold" href="{% url 'activity_list' %}">Ver todas</a></div>
+            {% for activity in agenda %}
+              <a class="agenda-item" href="{% url 'activity_detail' activity.pk %}">
+                {% include 'core/_date.html' with date=activity.start_date size='sm' %}
+                <span>
+                  <strong>{{ activity.title }}</strong>
+                  <small>{{ activity.start_date|date:'H:i' }}{% if activity.location %} · {{ activity.location }}{% endif %}</small>
+                </span>
+              </a>
+            {% empty %}
+              <div class="empty-state py-4"><i class="bi bi-calendar2-x"></i>Nenhuma atividade agendada por enquanto.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if activities %}
+  <section class="container pb-4">
+    <div class="section-head">
+      <h2>Próximas atividades</h2>
+      <a class="fw-semibold" href="{% url 'activity_list' %}">Ver todas</a>
+    </div>
+    <div class="row g-4">
+      {% for activity in activities %}{% include 'activities/_card.html' %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

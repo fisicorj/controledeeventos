@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: arena_events
+      POSTGRES_USER: arena_user
+      POSTGRES_PASSWORD: arena_password
+    ports:
+      # Só acessível pela própria máquina (antes ficava exposto na rede)
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - arena_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arena_user -d arena_events"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Aplicação em modo produção. Desenvolvimento continua com "docker compose up -d db" + runserver.
+  web:
+    build: .
+    profiles: ["prod"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    ports:
+      - "8000:8000"
+    volumes:
+      - arena_media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  arena_postgres_data:
+  arena_media:

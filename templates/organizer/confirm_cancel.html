@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Cancelar atividade | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="panel panel-body my-5">
+  <div class="avatar mb-3" style="width:48px;height:48px;font-size:1.3rem"><i class="bi bi-x-circle" aria-hidden="true"></i></div>
+  <h1 class="h2">Cancelar atividade</h1>
+  <p>Confirma o cancelamento de <strong>{{ object }}</strong>?</p>
+  <div class="alert alert-warning">
+    {% if confirmed %}{{ confirmed }} inscrito{{ confirmed|pluralize }} {{ confirmed|pluralize:"verá,verão" }} a atividade como cancelada e o QR Code deixará de valer.{% endif %}
+    O check-in de todas as sessões será fechado. Inscrições e presenças já registradas ficam preservadas.
+  </div>
+  <form method="post" class="d-flex gap-2 mt-3">
+    {% csrf_token %}
+    <button class="btn btn-danger">Cancelar atividade</button>
+    <a class="btn btn-outline-secondary" href="{% url 'organizer_dashboard' %}">Voltar</a>
+  </form>
+  </div>
+</main>
+{% endblock %}

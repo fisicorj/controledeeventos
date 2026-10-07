@@ -1,0 +1,9 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Segue anexo o seu certificado de "{{ certificate.activity_title }}".
+
+Código de validação: {{ certificate.code }}
+Qualquer pessoa pode conferir a autenticidade em: {{ verify_url }}
+
+{{ institution }}
+{% endautoescape %}

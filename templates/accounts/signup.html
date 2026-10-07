@@ -1,0 +1,13 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Cadastro | {{ portal.portal_name }}{% endblock %}
+{% block side_title %}Crie sua conta e participe{% endblock %}
+{% block heading %}Criar conta{% endblock %}
+{% block intro %}<p class="text-secondary">Com a conta você se inscreve nas atividades e acompanha QR Codes e certificados.</p>{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'core/_form.html' with form=form %}
+  <button class="btn btn-primary w-100 py-2 mt-4">Criar conta</button>
+</form>
+<p class="mt-4 mb-0 text-center text-secondary">Já possui conta? <a href="{% url 'login' %}">Entrar</a>.</p>
+{% endblock %}

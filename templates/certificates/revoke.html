@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}{{ heading }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="panel panel-body my-5">
+    <div class="avatar mb-3" style="width:48px;height:48px;font-size:1.3rem"><i class="bi bi-x-octagon" aria-hidden="true"></i></div>
+    <h1 class="h2">{{ heading }}</h1>
+    <p class="mb-2"><strong>{{ subject }}</strong></p>
+    <div class="alert alert-warning small">
+      {{ consequence }} Quem validar o código verá <strong>"Certificado revogado"</strong>, com a data e o motivo.
+      Nada é apagado: o registro fica na auditoria e esta ação não pode ser desfeita.
+    </div>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include 'core/_field.html' with field=form.reason %}
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-danger">{{ button }}</button>
+        <a class="btn btn-outline-secondary" href="{% url 'batch_detail' batch.pk %}">Voltar</a>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock %}
