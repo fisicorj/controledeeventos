@@ -1,4 +1,4 @@
-ruff==0.16.10
+ruff==0.17.0
 # Verifica dependências com vulnerabilidade conhecida (roda na CI): pip-audit -r requirements.txt
 pip-audit==2.10.1
 # Cobertura dos testes (roda na CI; sem meta mínima, só para acompanhar): coverage run manage.py test && coverage report
