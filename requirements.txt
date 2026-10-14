@@ -1,6 +1,6 @@
 # Versões fixas: o mesmo conjunto testado vai para o servidor. Para atualizar, troque a versão aqui, rode os
 # testes e faça o deploy. O Dependabot (.github/dependabot.yml) abre um pull request quando sai versão nova.
-Django==5.2.17
+Django==6.1.2
 psycopg[binary]==3.3.6
 python-dotenv==1.2.3
 Pillow==12.3.0
