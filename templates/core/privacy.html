@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Aviso de privacidade | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:820px">
+  <div class="page-head">
+    <h1>Aviso de privacidade</h1>
+    <p>Como o {{ portal.portal_name }}, mantido por {{ portal.institution_name }}, trata os seus dados pessoais, de acordo com a Lei Geral de Proteção de Dados (Lei 13.709/2018).</p>
+  </div>
+  <div class="panel panel-body mb-4 privacy-text">
+    <h2 class="h5">Quais dados guardamos</h2>
+    <ul>
+      <li><strong>Cadastro:</strong> nome, sobrenome, usuário de acesso, e-mail e, se você informar, matrícula ou CPF. A senha fica guardada de forma irreversível (ninguém consegue lê-la).</li>
+      <li><strong>Inscrições:</strong> as atividades em que você se inscreveu, o tipo de vaga, as respostas às perguntas do formulário de inscrição e a lista de espera.</li>
+      <li><strong>Presença e certificados:</strong> o registro de presença em cada sessão (com data, hora e quem registrou) e os certificados emitidos, com o nome, o documento e o código de validação. Se uma presença for removida, fica registrado quem removeu e quando.</li>
+      <li><strong>Pesquisa de satisfação:</strong> a nota e o comentário, mostrados à organização sem o seu nome.</li>
+      <li><strong>Segurança:</strong> o endereço IP em registros de check-in, da auditoria de certificados e dos limites de tentativas de login (estes guardados de forma que não dá para recuperar o IP).</li>
+    </ul>
+    <h2 class="h5">Para que usamos</h2>
+    <p>Para fazer a sua inscrição, controlar as vagas e a lista de espera, registrar a presença, emitir e validar certificados, enviar os e-mails sobre as atividades em que você se inscreveu e proteger as contas contra acesso indevido. A matrícula confirmada pelo e-mail institucional libera as vagas reservadas a alunos.</p>
+    <h2 class="h5">Quem vê</h2>
+    <p>A organização de cada atividade vê os dados de quem se inscreveu nela. A equipe de check-in vê só o nome. Os administradores do portal veem o cadastro. Quem tiver o código de um certificado vê, na validação pública, o nome, a atividade e a matrícula (o CPF aparece mascarado). Não vendemos nem compartilhamos os dados com terceiros para outros fins.</p>
+    <h2 class="h5">Por quanto tempo</h2>
+    <p>O cadastro fica enquanto a conta existir. Certificados emitidos e a auditoria de emissões são guardados por tempo indeterminado, porque a instituição precisa comprovar o que certificou e qualquer pessoa pode validar um certificado. O mesmo vale para o registro de presenças removidas.{% if outbox_retention_days %} Dos e-mails enviados pelo portal, o destinatário e o conteúdo ficam guardados por {{ outbox_retention_days }} dias (para reenvio e verificação de falhas) e depois são apagados.{% endif %}</p>
+    <h2 class="h5">Seus direitos</h2>
+    <p>Você pode, a qualquer momento, em <a href="{% url 'profile' %}">Meus dados</a>: corrigir nome, e-mail e matrícula ou CPF; <a href="{% url 'my_data' %}">baixar uma cópia dos seus dados</a>; e excluir a conta. Na exclusão, os dados do cadastro, as respostas aos formulários e os e-mails enviados a você são apagados; certificados já emitidos continuam válidos.</p>
+    <h2 class="h5 mb-2">Contato</h2>
+    <p class="mb-0">{% if portal.privacy_contact_email %}Pedidos e dúvidas sobre dados pessoais: <a href="mailto:{{ portal.privacy_contact_email }}">{{ portal.privacy_contact_email }}</a>.{% else %}Pedidos e dúvidas sobre dados pessoais: fale com a secretaria de {{ portal.institution_name }}.{% endif %}</p>
+  </div>
+</main>
+{% endblock %}

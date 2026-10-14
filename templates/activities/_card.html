@@ -13,7 +13,7 @@
         <span class="type-label">{{ activity.get_activity_type_display }}</span>
         {% with pill=activity.state_pill %}<span class="pill {{ pill.css }}">{{ pill.label }}</span>{% endwith %}
       </div>
-      <h3 class="event-title"><a href="{% url 'activity_detail' activity.pk %}" class="stretched-link">{{ activity.title }}</a></h3>
+      <h3 class="event-title"><a href="{{ activity.get_absolute_url }}" class="stretched-link">{{ activity.title }}</a></h3>
       <ul class="event-meta">
         <li><i class="bi bi-clock" aria-hidden="true"></i>{{ activity.start_date|date:'d/m \à\s H:i' }}{% if activity.end_date|date:'Ymd' != activity.start_date|date:'Ymd' %} até {{ activity.end_date|date:'d/m' }}{% endif %}</li>
         {% if activity.location %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i>{{ activity.location }}</li>{% endif %}

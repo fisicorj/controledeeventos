@@ -9,11 +9,21 @@
       {% if kind == 'checkbox' %}
         {{ field|styled }}
         <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-      {% else %}
+      {% elif kind == 'choices' %}
+      <div class="form-label">{{ field.label }}</div>
+      <div class="choice-list">
+        {% for option in field %}
+          <div class="form-check">
+            <input class="form-check-input" type="{{ option.data.type }}" name="{{ option.data.name }}" value="{{ option.data.value }}" id="{{ option.id_for_label }}"{% if option.data.selected %} checked{% endif %}>
+            <label class="form-check-label" for="{{ option.id_for_label }}">{{ option.choice_label }}</label>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
         <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
         {{ field|styled }}
       {% endif %}
-      {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text|safe }}</div>{% endif %}
+      {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text }}</div>{% endif %}
       {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
     </div>
     {% endwith %}

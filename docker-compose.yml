@@ -2,21 +2,21 @@ services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: arena_events
-      POSTGRES_USER: arena_user
-      POSTGRES_PASSWORD: arena_password
+      POSTGRES_DB: ${DB_NAME:-arena_events}
+      # O usuário criado pelo PostgreSQL é o dono das tabelas: DB_MIGRATE_USER quando a aplicação usa um papel
+      # próprio (README, "Banco: dois papéis"); senão, o próprio DB_USER.
+      POSTGRES_USER: ${DB_MIGRATE_USER:-${DB_USER:-arena_user}}
+      POSTGRES_PASSWORD: ${DB_MIGRATE_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD deve ser definida no .env}}
     ports:
-      # Só acessível pela própria máquina (antes ficava exposto na rede)
       - "127.0.0.1:5432:5432"
     volumes:
       - arena_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U arena_user -d arena_events"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # Aplicação em modo produção. Desenvolvimento continua com "docker compose up -d db" + runserver.
   web:
     build: .
     profiles: ["prod"]
@@ -24,15 +24,41 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "5432"
+      # Quem envia os e-mails é o worker; o web só coloca na fila (não perde envio se o gunicorn reiniciar).
+      OUTBOX_MODE: "off"
     ports:
       - "8000:8000"
     volumes:
       - arena_media:/app/media
+      - arena_private_media:/app/private_media
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/saude/', timeout=5).status != 200)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  worker:
+    build: .
+    profiles: ["prod"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    command: ["python", "manage.py", "process_outbox", "--continuo"]
+    volumes:
+      - arena_media:/app/media
+      - arena_private_media:/app/private_media
+    depends_on:
+      web:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   arena_postgres_data:
   arena_media:
+  arena_private_media:

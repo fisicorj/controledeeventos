@@ -10,14 +10,26 @@ class SiteSettingsForm(forms.ModelForm):
             'portal_name', 'primary_color', 'institution_name', 'city', 'logo',
             'signer_name', 'signer_role', 'signature_image',
             'certificate_background', 'certificate_title', 'certificate_opening', 'certificate_place',
-            'document_label', 'certificate_offset_mm', 'certificate_show_qr',
+            'document_label', 'certificate_offset_mm', 'certificate_show_qr', 'student_email_domains',
+            'privacy_contact_email',
         ]  # fmt: skip
         widgets = {'primary_color': forms.TextInput(attrs={'type': 'color'})}
+
+    def clean_student_email_domains(self):
+        return _clean_domains(self.cleaned_data.get('student_email_domains', ''))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
+
+
+def _clean_domains(value):
+    domains = [d.strip().lower().lstrip('@') for d in value.split(',') if d.strip()]
+    for domain in domains:
+        if '.' not in domain or ' ' in domain or '@' in domain:
+            raise forms.ValidationError(f'"{domain}" não parece um domínio. Use algo como aluno.fsa.br.')
+    return ', '.join(domains)
 
 
 class EmailSettingsForm(forms.ModelForm):
@@ -33,7 +45,7 @@ class EmailSettingsForm(forms.ModelForm):
         model = EmailSettings
         fields = [
             'enabled', 'host', 'port', 'security', 'verify_certificate', 'username',
-            'from_email', 'from_name', 'reply_to', 'timeout',
+            'from_email', 'from_name', 'reply_to', 'timeout', 'error_alert_email',
         ]  # fmt: skip
 
     def __init__(self, *args, **kwargs):

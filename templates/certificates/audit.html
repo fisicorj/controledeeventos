@@ -35,14 +35,6 @@
     {% include 'certificates/_events.html' with events=page.object_list %}
   </section>
 
-  {% if page.paginator.num_pages > 1 %}
-    <nav class="d-flex justify-content-between align-items-center mt-3 small" aria-label="Páginas">
-      <span class="text-secondary">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
-      <div class="d-flex gap-2">
-        {% if page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}pagina={{ page.previous_page_number }}">Anterior</a>{% endif %}
-        {% if page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{% if querystring %}{{ querystring }}&{% endif %}pagina={{ page.next_page_number }}">Próxima</a>{% endif %}
-      </div>
-    </nav>
-  {% endif %}
+  {% include 'core/_pager.html' with label='registros' %}
 </main>
 {% endblock %}

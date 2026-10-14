@@ -1,14 +1,16 @@
-Django>=5.2,<6.0
-psycopg[binary]>=3.2
-python-dotenv>=1.0
-Pillow>=11.0
-openpyxl>=3.1
-qrcode[pil]>=8.0
-reportlab>=4.2
-cryptography>=42
-whitenoise>=6.7
+# Versões fixas: o mesmo conjunto testado vai para o servidor. Para atualizar, troque a versão aqui, rode os
+# testes e faça o deploy. O Dependabot (.github/dependabot.yml) abre um pull request quando sai versão nova.
+Django==5.2.17
+psycopg[binary]==3.3.6
+python-dotenv==1.2.3
+Pillow==12.3.0
+openpyxl==3.1.5
+# Leitura segura do XML das planilhas .xlsx (o openpyxl usa sozinho quando está instalado)
+defusedxml==0.7.1
+qrcode[pil]==8.2
+reportlab==5.0.1
+cryptography==50.0.1
+whitenoise==6.12.0
 # Servidor de produção: gunicorn no Linux/Docker, waitress no Windows
-gunicorn>=23.0; sys_platform != "win32"
-waitress>=3.0; sys_platform == "win32"
-ruff>=0.6
-
+gunicorn==26.2.0; sys_platform != "win32"
+waitress==3.0.2; sys_platform == "win32"

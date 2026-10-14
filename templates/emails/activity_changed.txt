@@ -1,0 +1,13 @@
+{% autoescape off %}Olá, {{ name }}.
+
+A organização mudou {% if changes|length == 1 %}um detalhe{% else %}alguns detalhes{% endif %} da atividade "{{ activity.title }}"{% if waitlisted %}, da qual você está na lista de espera{% endif %}:
+{% for c in changes %}
+{{ c.label }}: {{ c.after }} (antes: {{ c.before }}){% endfor %}
+
+{% if waitlisted %}Você continua na lista de espera.{% else %}Sua inscrição continua confirmada e o QR Code de entrada é o mesmo.{% endif %} Se não puder ir na nova data, cancele a inscrição em Minhas inscrições para liberar a vaga:
+{{ my_registrations_url }}
+
+Página da atividade: {{ activity_url }}
+
+{{ institution }}
+{% endautoescape %}

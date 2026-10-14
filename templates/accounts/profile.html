@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Meus dados | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_registrations' %}">Minhas inscrições</a></div>
+    <h1>Meus dados</h1>
+    <p>Usuário de acesso: <strong>{{ user.username }}</strong></p>
+    <dl class="row small mb-0">
+      <dt class="col-sm-3">E-mail</dt>
+      <dd class="col-sm-9">{{ user.email }} {% if user.email_verified %}<span class="pill pill-open">confirmado</span>{% else %}<span class="pill pill-wait">não confirmado</span> <a href="{% url 'verify_email' %}">confirmar agora</a>{% endif %}</dd>
+      <dt class="col-sm-3">Matrícula ou CPF</dt>
+      <dd class="col-sm-9">{% if user.institutional_id %}{{ user.institutional_id }} {% if user.student_id_confirmed %}<span class="pill pill-open">matrícula confirmada</span>{% elif document_is_cpf %}<span class="pill pill-muted">CPF</span>{% else %}<span class="pill pill-wait">matrícula não confirmada</span>{% endif %}{% else %}Não informado.{% endif %}{% if domains and not user.student_id_confirmed %}<div class="text-secondary">Aluno: use o e-mail institucional ({% for d in domains %}@{{ d }}{% if not forloop.last %} ou {% endif %}{% endfor %}) e a mesma matrícula dele, e confirme o código.</div>{% endif %}</dd>
+    </dl>
+  </div>
+  <form method="post" class="panel panel-body" novalidate>
+    {% csrf_token %}
+    <div class="alert alert-info small"><i class="bi bi-award me-1" aria-hidden="true"></i>Seu nome aparece nos certificados exatamente como estiver aqui, com acentos e maiúsculas. Certificados já emitidos não mudam.</div>
+    {% include 'core/_form.html' with form=form %}
+    <div class="d-flex gap-2 mt-4 flex-wrap">
+      <button class="btn btn-primary px-4">Salvar</button>
+      <a class="btn btn-outline-secondary" href="{% url 'password_change' %}"><i class="bi bi-key"></i>Trocar senha</a>
+    </div>
+  </form>
+  {% if mfa_applies %}
+    <section class="panel panel-body mt-4">
+      <h2 class="h5">Verificação em duas etapas</h2>
+      <p class="small text-secondary mb-2">{% if mfa_active %}<span class="pill pill-open">ativa</span> O acesso pede o código do aplicativo autenticador além da senha.{% else %}<span class="pill pill-wait">desativada</span> Proteja a conta de administração ou organização com um código do celular, além da senha.{% endif %}</p>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'mfa_setup' %}"><i class="bi bi-shield-lock"></i>{% if mfa_active %}Gerenciar{% else %}Ativar{% endif %}</a>
+    </section>
+  {% endif %}
+  <section class="panel panel-body mt-4">
+    <h2 class="h5">Privacidade</h2>
+    <p class="small text-secondary">Veja no <a href="{% url 'privacy' %}">aviso de privacidade</a> quais dados o portal guarda e para quê.</p>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'my_data' %}"><i class="bi bi-download"></i>Baixar uma cópia dos meus dados</a>
+      {% if can_delete %}<a class="btn btn-outline-danger btn-sm" href="{% url 'delete_account' %}"><i class="bi bi-person-x"></i>Excluir minha conta</a>{% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}

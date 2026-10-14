@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import reports, views
+from . import announcements, operations, reports, views
 
 urlpatterns = [
     path('', views.activity_list, name='activity_list'),
@@ -12,12 +12,36 @@ urlpatterns = [
     path('organizer/<int:pk>/cancel/', views.activity_cancel, name='activity_cancel'),
     path('organizer/<int:pk>/finish/', views.activity_finish, name='activity_finish'),
     path('organizer/<int:pk>/certificates/', views.certificates_issue, name='certificates_issue'),
+    path('organizer/<int:activity_id>/equipe/', views.checkin_staff_add, name='checkin_staff_add'),
+    path(
+        'organizer/<int:activity_id>/equipe/<int:user_id>/remover/',
+        views.checkin_staff_remove,
+        name='checkin_staff_remove',
+    ),
     path('organizer/<int:activity_id>/sessions/new/', views.session_create, name='session_create'),
     path('organizer/sessions/<int:pk>/edit/', views.session_edit, name='session_edit'),
     path('organizer/sessions/<int:pk>/delete/', views.session_delete, name='session_delete'),
     path('organizer/<int:activity_id>/questions/new/', views.question_create, name='question_create'),
     path('organizer/questions/<int:pk>/edit/', views.question_edit, name='question_edit'),
     path('organizer/questions/<int:pk>/delete/', views.question_delete, name='question_delete'),
+    path('organizer/<int:activity_id>/speakers/new/', views.speaker_create, name='speaker_create'),
+    path('organizer/speakers/<int:pk>/edit/', views.speaker_edit, name='speaker_edit'),
+    path('organizer/speakers/<int:pk>/delete/', views.speaker_delete, name='speaker_delete'),
+    path(
+        'organizer/<int:activity_id>/comunicados/novo/',
+        announcements.announcement_create,
+        name='announcement_create',
+    ),
+    path('organizer/<int:activity_id>/categories/new/', views.category_create, name='category_create'),
+    path('organizer/categories/<int:pk>/edit/', views.category_edit, name='category_edit'),
+    path('organizer/categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
+    path('organizer/<int:activity_id>/materials/new/', operations.material_create, name='material_create'),
+    path('organizer/materials/<int:pk>/edit/', operations.material_edit, name='material_edit'),
+    path('organizer/materials/<int:pk>/delete/', operations.material_delete, name='material_delete'),
+    path('materiais/<int:pk>/', operations.material_open, name='material_open'),
+    path('organizer/<int:pk>/duplicate/', operations.activity_duplicate, name='activity_duplicate'),
+    path('organizer/<int:pk>/numeros/', operations.activity_stats, name='activity_stats'),
+    path('organizer/<int:pk>/crachas/', operations.badges, name='activity_badges'),
     # Relatórios
     path('organizer/<int:pk>/export.csv', reports.registrations_csv, name='report_registrations_csv'),
     path('organizer/<int:pk>/frequencia.pdf', reports.attendance_pdf, name='report_attendance_pdf'),

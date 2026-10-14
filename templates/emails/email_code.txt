@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Seu código de confirmação é:
+
+    {{ code }}
+
+Ele vale por {{ minutes }} minutos. Digite o código na página aberta no {{ institution }} para confirmar o seu e-mail.
+
+Se você não pediu este código, ignore esta mensagem: nada muda na sua conta.
+
+{{ institution }}
+{% endautoescape %}

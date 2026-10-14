@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Códigos de recuperação | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <h1>Códigos de recuperação</h1>
+    <p>Guarde estes códigos num lugar seguro (gerenciador de senhas ou papel guardado). Cada um permite entrar <strong>uma vez</strong> sem o celular. Eles <strong>não serão mostrados de novo</strong>.</p>
+  </div>
+  <section class="panel panel-body">
+    <ul class="list-unstyled row row-cols-2 g-2 font-monospace fs-5 mb-4" id="codes">
+      {% for code in codes %}<li class="col">{{ code }}</li>{% endfor %}
+    </ul>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-outline-secondary" id="copy" data-copy-list="#codes"><i class="bi bi-clipboard"></i>Copiar</button>
+      <a class="btn btn-primary" href="{% url 'home' %}">Já guardei os códigos</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

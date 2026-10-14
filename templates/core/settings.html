@@ -26,7 +26,7 @@
           </div>
           <div class="col-md-5">
             <div class="form-label">Pré-visualização</div>
-            <div class="border rounded-3 overflow-hidden" aria-hidden="true">
+            <div class="border rounded-3 overflow-hidden" aria-hidden="true" id="brand-preview">
               <div class="d-flex align-items-center gap-2 p-3 bg-white border-bottom">
                 {% if portal.logo %}<img src="{{ portal.logo.url }}" alt="" style="max-height:30px;max-width:110px">{% else %}<span class="brand-mark" id="pv-mark" style="width:30px;height:30px;font-size:.9rem">{{ portal.portal_name|slice:":1" }}</span>{% endif %}
                 <strong id="pv-name" class="small">{{ portal.portal_name }}</strong>
@@ -54,6 +54,9 @@
           <div class="col-md-7">{% include 'core/_field.html' with field=form.institution_name %}</div>
           <div class="col-md-5">{% include 'core/_field.html' with field=form.city %}</div>
         </div>
+        {% include 'core/_field.html' with field=form.student_email_domains %}
+        {% include 'core/_field.html' with field=form.privacy_contact_email %}
+        <p class="small mb-0"><a href="{% url 'privacy' %}" target="_blank">Ver o aviso de privacidade</a></p>
       </div>
     </section>
 
@@ -64,7 +67,8 @@
           <div class="col-md-6">{% include 'core/_field.html' with field=form.signer_name %}</div>
           <div class="col-md-6">{% include 'core/_field.html' with field=form.signer_role %}</div>
         </div>
-        {% include 'core/_field.html' with field=form.signature_image image=portal.signature_image %}
+        {% if portal.signature_image %}{% url 'settings_private_image' 'assinatura' as signature_url %}{% endif %}
+        {% include 'core/_field.html' with field=form.signature_image image_url=signature_url %}
       </div>
     </section>
 
@@ -74,7 +78,8 @@
         <a class="btn btn-sm btn-outline-primary" href="{% url 'certificate_preview' %}" target="_blank"><i class="bi bi-eye"></i>Pré-visualizar</a>
       </div>
       <div class="panel-body">
-        {% include 'core/_field.html' with field=form.certificate_background image=portal.certificate_background %}
+        {% if portal.certificate_background %}{% url 'settings_private_image' 'fundo' as background_url %}{% endif %}
+        {% include 'core/_field.html' with field=form.certificate_background image_url=background_url %}
         <div class="row g-3">
           <div class="col-md-5">{% include 'core/_field.html' with field=form.certificate_title %}</div>
           <div class="col-md-7">{% include 'core/_field.html' with field=form.certificate_opening %}</div>
@@ -97,23 +102,6 @@
     </div>
   </form>
   <p class="small text-secondary mt-3">Certificados já emitidos guardam o nome do participante e da atividade da época da emissão; o visual (logo, assinatura, nome da instituição) segue as configurações atuais sempre que o PDF é baixado.</p>
+  <div hidden data-brand-preview="#brand-preview" data-color="{{ form.primary_color.id_for_label }}" data-name="{{ form.portal_name.id_for_label }}"></div>
 </main>
-{% endblock %}
-{% block scripts %}
-<script>
-  (function () {
-    const color = document.getElementById('{{ form.primary_color.id_for_label }}');
-    const name = document.getElementById('{{ form.portal_name.id_for_label }}');
-    const preview = document.querySelector('.border.rounded-3');
-    function contrast(hex) {
-      const c = [1, 3, 5].map(i => parseInt(hex.substr(i, 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.4 ? '#ffffff' : '#1c2533';
-    }
-    color.addEventListener('input', () => {
-      preview.style.setProperty('--brand', color.value);
-      preview.style.setProperty('--brand-contrast', contrast(color.value));
-    });
-    name.addEventListener('input', () => { document.getElementById('pv-name').textContent = name.value; });
-  })();
-</script>
 {% endblock %}

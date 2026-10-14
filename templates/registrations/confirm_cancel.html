@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Cancelar inscrição | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+{% with activity=registration.activity %}
+<main class="container" style="max-width:640px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_registrations' %}">Minhas inscrições</a></div>
+  </div>
+  <div class="panel panel-body">
+    <h1 class="h3">{% if registration.status == 'WAITLISTED' %}Sair da lista de espera?{% else %}Cancelar a inscrição?{% endif %}</h1>
+    <p class="mb-2"><strong>{{ activity.title }}</strong> · {{ activity.start_date|date:'d/m/Y \à\s H:i' }}</p>
+    <div class="alert alert-warning small">
+      {% if registration.status == 'WAITLISTED' %}
+        Você perde a sua posição na fila ({{ registration.waitlist_position }}º). Se quiser voltar depois, entra no fim da fila.
+      {% elif has_waitlist %}
+        A sua vaga passa <strong>na hora</strong> para a próxima pessoa da lista de espera. Não dá para desfazer: se quiser voltar, você entra no fim da fila.
+      {% else %}
+        A sua vaga fica livre para outra pessoa. Se quiser voltar depois, a inscrição depende de ainda haver vaga.
+      {% endif %}
+    </div>
+    <form method="post" class="d-flex gap-2 flex-wrap">
+      {% csrf_token %}
+      <button class="btn btn-danger">{% if registration.status == 'WAITLISTED' %}Sair da lista de espera{% else %}Cancelar inscrição{% endif %}</button>
+      <a class="btn btn-outline-secondary" href="{% url 'my_registrations' %}">Manter inscrição</a>
+    </form>
+  </div>
+</main>
+{% endwith %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Verificação em duas etapas | {{ portal.portal_name }}{% endblock %}
+{% block side_title %}Segunda etapa do acesso{% endblock %}
+{% block side_text %}Contas de administração e organização confirmam o acesso com o aplicativo autenticador do celular.{% endblock %}
+{% block heading %}Verificação em duas etapas{% endblock %}
+{% block intro %}<p class="text-secondary">Abra o aplicativo autenticador e digite o código de 6 dígitos do {{ portal.portal_name }}. Sem o celular, use um dos códigos de recuperação.</p>{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'core/_form.html' with form=form %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="btn btn-primary w-100 py-2 mt-3">Confirmar</button>
+</form>
+<form method="post" action="{% url 'logout' %}" data-logout class="mt-4 text-center">
+  {% csrf_token %}
+  <button class="btn btn-link">Sair e entrar com outra conta</button>
+</form>
+<p class="small text-secondary mt-3 mb-0">Perdeu o celular e os códigos de recuperação? Peça a um administrador para apagar o seu cadastro da verificação em duas etapas.</p>
+{% endblock %}

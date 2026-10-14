@@ -17,6 +17,7 @@ class SignUpTests(TestCase):
             'email': 'Ana@Exemplo.com',
             'password1': PASSWORD,
             'password2': PASSWORD,
+            'accept_privacy': 'on',
         }
         data.update(changes)
         return data
@@ -28,8 +29,8 @@ class SignUpTests(TestCase):
     def test_email_repetido_com_maiusculas(self):
         User.objects.create_user('existente', 'ana@exemplo.com', PASSWORD)
         response = self.client.post(reverse('signup'), self.data(email='ANA@exemplo.com'))
-        self.assertContains(response, 'Já existe uma conta com este e-mail.')
-        self.assertEqual(User.objects.count(), 1)
+        self.assertRedirects(response, reverse('verify_email'))  # não revela que o e-mail já tem conta
+        self.assertEqual(User.objects.filter(email__iexact='ana@exemplo.com', email_verified=True).count(), 1)
 
 
 class PasswordResetTests(TestCase):

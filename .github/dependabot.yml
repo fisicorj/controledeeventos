@@ -1,0 +1,21 @@
+# Avisa (com um pull request) quando sai versão nova das dependências. A CI roda os testes no pull request.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      django-e-bibliotecas:
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  # Imagem base do Dockerfile (python:3.12-slim): avisa quando sai versão nova.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

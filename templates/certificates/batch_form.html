@@ -7,6 +7,7 @@
     <h1>{% if batch %}Adicionar participantes{% else %}Nova emissão avulsa{% endif %}</h1>
     <ol class="steps"><li class="current"><span class="dot">1</span>{% if batch %}Planilha{% else %}Evento e planilha{% endif %}</li><li><span class="dot">2</span>Conferir a prévia</li><li><span class="dot">3</span>Emitir</li></ol>
   </div>
+  {% if not batch %}{% include 'certificates/_new_modes.html' with mode='form' %}{% endif %}
   <form method="post" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
     {% if event_form %}

@@ -76,7 +76,7 @@
   <form method="post" class="d-flex gap-2 justify-content-end flex-wrap">
     {% csrf_token %}
     <input type="hidden" name="token" value="{{ data.token }}">
-    <a class="btn btn-outline-secondary" href="{% if batch %}{% url 'batch_add' batch.pk %}{% else %}{% url 'batch_new' %}{% endif %}"><i class="bi bi-arrow-left"></i>Enviar outra planilha</a>
+    <a class="btn btn-outline-secondary" href="{% if batch %}{% url 'batch_add' batch.pk %}{% elif data.mode == 'full' %}{% url 'batch_full' %}{% else %}{% url 'batch_new' %}{% endif %}"><i class="bi bi-arrow-left"></i>Enviar outra planilha</a>
     <button class="btn btn-primary"{% if not valid_count %} disabled{% endif %}><i class="bi bi-award"></i>Emitir {{ valid_count }} certificado{{ valid_count|pluralize }}</button>
   </form>
 </main>

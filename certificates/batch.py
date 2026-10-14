@@ -1,25 +1,22 @@
 """Emissão avulsa: grava os certificados importados da planilha, monta o ZIP e envia por e-mail."""
 
-import logging
 import tempfile
 import zipfile
 from datetime import datetime, time
 
-from django.core.mail import get_connection
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
-from accounts.models import User
-from registrations.notifications import absolute_url, build_message
+from core import permissions
+from registrations import notifications
+from registrations.notifications import absolute_url
 
-from . import audit
+from . import audit, zips
 from .batch_import import participant_key
 from .models import Certificate, CertificateBatch
 from .pdf import certificate_pdf
-
-logger = logging.getLogger(__name__)
 
 
 def as_datetime(day):
@@ -27,19 +24,8 @@ def as_datetime(day):
     return timezone.make_aware(datetime.combine(day, time(12)))
 
 
-def can_manage_batch(user, batch=None):
-    if not user.is_authenticated:
-        return False
-    if user.is_superuser or user.role == User.Role.ADMIN:
-        return True
-    return user.role == User.Role.ORGANIZER and (batch is None or batch.created_by_id == user.id)
-
-
 def batches_for(user):
-    qs = CertificateBatch.objects.select_related('created_by')
-    if user.is_superuser or user.role == User.Role.ADMIN:
-        return qs
-    return qs.filter(created_by=user)
+    return permissions.batches_for(user, CertificateBatch.objects.select_related('created_by'))
 
 
 def existing_keys(batch):
@@ -88,6 +74,8 @@ def issue_batch(batch, rows, request=None):
         )
     created = Certificate.objects.bulk_create(created)
     audit.record(audit.Action.ISSUED, created, request=request, details={'source': 'Emissão avulsa'})
+    if created:
+        zips.discard([batch.pk])
     return created
 
 
@@ -116,6 +104,7 @@ def update_batch(batch, request=None):
         changed.append((certificate, diff))
     for certificate, diff in changed:
         audit.record(audit.Action.UPDATED, [certificate], request=request, details={'changes': diff})
+    zips.discard([batch.pk])  # a assinatura pode ter mudado mesmo sem diferença nos certificados
     return len(changed)
 
 
@@ -128,6 +117,7 @@ def revoke(certificates, reason, request=None, extra=None):
         certificate.revoked_at, certificate.revoked_by, certificate.revoked_reason = now, request.user, reason
         certificate.save(update_fields=['revoked_at', 'revoked_by', 'revoked_reason'])
     audit.record(audit.Action.REVOKED, targets, request=request, details={'reason': reason, **(extra or {})})
+    zips.discard([c.batch_id for c in targets if c.batch_id])
     return targets
 
 
@@ -146,8 +136,9 @@ def pdf_filename(certificate):
     return f'{prefix}-{name}.pdf' if prefix else f'{name}-{certificate.code}.pdf'
 
 
-def build_zip(batch, request=None):
-    """ZIP com um PDF por participante. Fica em arquivo temporário para não estourar a memória em lotes grandes."""
+def build_zip(batch, request=None, actor=None, with_count=False):
+    """ZIP com um PDF por participante. Fica em arquivo temporário para não estourar a memória em lotes grandes.
+    Fora de uma requisição (ZIP montado em segundo plano, certificates/zips.py), quem pediu vem em `actor`."""
     signer = signer_for(batch)
     spool = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)
     used, included = set(), []
@@ -159,28 +150,49 @@ def build_zip(batch, request=None):
             used.add(filename)
             archive.writestr(filename, certificate_pdf(certificate, signer_name=signer))
             included.append(certificate)
-    audit.record(audit.Action.DOWNLOADED, included, request=request, details={'via': 'zip'})
+    audit.record(audit.Action.DOWNLOADED, included, request=request, actor=actor, details={'via': 'zip'})
     spool.seek(0)
-    return spool
+    return (spool, len(included)) if with_count else spool
 
 
-def send_emails(batch, resend=False, request=None):
-    """Envia o PDF para quem tem e-mail na planilha. Por padrão só para quem ainda não recebeu.
-    Devolve (enviados, falhas)."""
+def pdf_attachment(certificate_id):
+    """Anexo gerado na hora do envio pela fila de e-mails (core/outbox.py)."""
+    from core.outbox import PermanentError
+
+    certificate = Certificate.objects.select_related('batch__created_by').get(pk=certificate_id)
+    if certificate.is_revoked:
+        raise PermanentError('O certificado foi revogado antes do envio.')
+    if certificate.batch_id:
+        signer = signer_for(certificate.batch)
+    else:
+        organizer = certificate.registration.activity.organizer
+        signer = organizer.get_full_name() or organizer.username
+    return pdf_filename(certificate), certificate_pdf(certificate, signer_name=signer), 'application/pdf'
+
+
+def email_group(batch):
+    return f'batch:{batch.pk}'
+
+
+def queue_emails(batch, resend=False, request=None):
+    """Coloca na fila o PDF de quem tem e-mail na planilha. Por padrão só para quem ainda não recebeu.
+    Quem já está na fila não entra de novo. Devolve (colocados na fila agora, que já estavam na fila)."""
+    from core.models import OutgoingEmail
+
     certificates = active(batch).exclude(participant_email='')
     if not resend:
         certificates = certificates.filter(emailed_at__isnull=True)
-    signer = signer_for(batch)
-    sent = failed = 0
-    try:
-        connection = get_connection()
-        connection.open()
-    except Exception:
-        logger.exception('Falha ao conectar no servidor de e-mail.')
-        return 0, certificates.count()
-    try:
+    waiting = set(
+        OutgoingEmail.objects.filter(
+            group=email_group(batch), status__in=[OutgoingEmail.Status.PENDING, OutgoingEmail.Status.SENDING]
+        ).values_list('certificate_pk', flat=True)
+    )
+    queued = 0
+    with transaction.atomic():
         for certificate in certificates.order_by('participant_name'):
-            message = build_message(
+            if certificate.pk in waiting:
+                continue
+            notifications.queue(
                 certificate.participant_email,
                 f'seu certificado de {certificate.activity_title}',
                 'certificate_batch',
@@ -189,29 +201,10 @@ def send_emails(batch, resend=False, request=None):
                     'certificate': certificate,
                     'verify_url': absolute_url(reverse('certificate_verify_code', args=[certificate.code])),
                 },
-                attachments=[
-                    (pdf_filename(certificate), certificate_pdf(certificate, signer_name=signer), 'application/pdf')
-                ],
+                [{'kind': 'certificate_pdf', 'id': certificate.pk}],
+                group=email_group(batch),
+                certificate=certificate,
+                request=request,
             )
-            try:
-                if connection.send_messages([message]):
-                    certificate.emailed_at = timezone.now()
-                    certificate.save(update_fields=['emailed_at'])
-                    audit.record(
-                        audit.Action.EMAILED,
-                        [certificate],
-                        request=request,
-                        details={'recipient': certificate.participant_email},
-                    )
-                    sent += 1
-                else:
-                    failed += 1
-            except Exception:
-                logger.exception('Falha ao enviar o certificado %s.', certificate.code)
-                failed += 1
-    finally:
-        try:
-            connection.close()
-        except Exception:
-            pass
-    return sent, failed
+            queued += 1
+    return queued, len(waiting)

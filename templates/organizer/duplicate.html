@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Duplicar | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>Criar a próxima edição</h1>
+    <p>Copia a atividade como rascunho. Todas as datas (término, inscrições e sessões) acompanham o novo início.</p>
+  </div>
+  <form method="post" class="panel panel-body" novalidate>
+    {% csrf_token %}
+    {% include 'core/_form.html' with form=form %}
+    <div class="small mt-3">
+      <strong>Vai junto:</strong> descrição, imagem, local, vagas, {% for label, n in counts.items %}{{ n }} {{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}, certificado e pesquisa.<br>
+      <strong>Não vai:</strong> inscrições, presenças, comunicados e materiais.
+    </div>
+    <div class="d-flex gap-2 mt-4">
+      <button class="btn btn-primary px-4"><i class="bi bi-copy"></i>Criar edição</button>
+      <a class="btn btn-outline-secondary" href="{% url 'activity_manage' activity.id %}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

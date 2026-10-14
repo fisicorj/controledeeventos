@@ -31,11 +31,13 @@
         <dt class="col-sm-4">Período</dt><dd class="col-sm-8">{{ certificate.start_date|date:'d/m/Y' }} a {{ certificate.end_date|date:'d/m/Y' }}</dd>
         {% if certificate.workload_hours %}<dt class="col-sm-4">Carga horária</dt><dd class="col-sm-8">{{ certificate.workload_hours }} horas</dd>{% endif %}
         {% if certificate.attendance_percent is not None %}<dt class="col-sm-4">Frequência</dt><dd class="col-sm-8">{{ certificate.attendance_percent }}%</dd>{% endif %}
-        {% if certificate.participant_document %}<dt class="col-sm-4">{{ portal.document_label|default:"Matrícula" }}</dt><dd class="col-sm-8">{{ certificate.participant_document }}</dd>{% endif %}
+        {% if certificate.participant_document %}<dt class="col-sm-4">{% if certificate.document_is_cpf %}CPF{% else %}{{ portal.document_label|default:"Matrícula" }}{% endif %}</dt><dd class="col-sm-8">{{ certificate.public_document }}</dd>{% endif %}
         <dt class="col-sm-4">Emitido em</dt><dd class="col-sm-8">{{ certificate.certificate_date|date:'d/m/Y' }}</dd>
         <dt class="col-sm-4">Código</dt><dd class="col-sm-8 mb-0"><code class="fs-6">{{ certificate.code }}</code></dd>
       </dl>
     </div>
+  {% elif throttled %}
+    <div class="alert alert-warning flash"><i class="bi bi-hourglass-split" aria-hidden="true"></i><div>Muitas consultas de códigos inexistentes a partir desta rede. Tente de novo em uma hora.</div></div>
   {% elif not_found %}
     <div class="alert alert-danger flash"><i class="bi bi-x-octagon" aria-hidden="true"></i><div>Nenhum certificado encontrado com o código <strong>{{ raw }}</strong>. Confira se foi digitado corretamente.</div></div>
   {% endif %}

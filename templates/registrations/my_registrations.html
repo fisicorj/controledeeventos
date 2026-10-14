@@ -4,7 +4,7 @@
 <main class="container">
   <div class="page-head">
     <h1>Minhas inscrições</h1>
-    <p>Apresente o QR Code no credenciamento e na presença de cada sessão.</p>
+    <p>Apresente o QR Code no credenciamento e na presença de cada sessão. Seus certificados e a soma das horas por semestre ficam em <a href="{% url 'my_hours' %}">Minhas horas</a>.</p>
   </div>
   <div class="row g-4">
     {% for registration in registrations %}
@@ -15,8 +15,9 @@
             <div class="d-flex gap-2 align-items-center flex-wrap">
               <span class="pill {% if registration.status == 'CONFIRMED' %}pill-open{% elif registration.status == 'WAITLISTED' %}pill-wait{% else %}pill-muted{% endif %}">{{ registration.get_status_display }}</span>
               <span class="type-label">{{ activity.get_activity_type_display }}</span>
+              {% if registration.category %}<span class="pill pill-muted">{{ registration.category.name }}</span>{% endif %}
             </div>
-            <h2 class="h5 mb-0"><a href="{% url 'activity_detail' activity.pk %}" class="text-reset text-decoration-none">{{ activity.title }}</a></h2>
+            <h2 class="h5 mb-0"><a href="{{ activity.get_absolute_url }}" class="text-reset text-decoration-none">{{ activity.title }}</a></h2>
             <ul class="event-meta">
               <li><i class="bi bi-clock" aria-hidden="true"></i>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</li>
               {% if activity.location %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i>{{ activity.location }}</li>{% endif %}
@@ -24,37 +25,58 @@
                 <li><i class="bi bi-person-check" aria-hidden="true"></i>Frequência: {{ registration.attendance_count }}/{{ registration.session_count }} sessões ({{ registration.attendance_percent }}%)</li>
               {% endif %}
             </ul>
+            {% if registration.materials %}
+              <div><a class="btn btn-sm btn-outline-primary" href="{{ activity.get_absolute_url }}#materiais"><i class="bi bi-folder2-open"></i>Materiais ({{ registration.materials|length }})</a></div>
+            {% endif %}
 
             <div class="mt-auto pt-2">
             {% if activity.status == 'CANCELLED' %}
               <div class="small text-danger"><i class="bi bi-x-octagon me-1" aria-hidden="true"></i>Esta atividade foi cancelada pela organização.</div>
             {% elif activity.status == 'FINISHED' %}
-              {% if registration.certificate %}
+              {% if registration.can_survey %}
+                <a class="btn btn-sm {% if registration.survey_blocks_certificate %}btn-primary{% else %}btn-outline-primary{% endif %} mb-2" href="{% url 'survey' registration.pk %}"><i class="bi bi-star"></i>Avaliar a atividade</a>
+              {% endif %}
+              {% if registration.certificate.is_revoked %}
+                <div class="small text-danger mb-2"><i class="bi bi-x-octagon me-1" aria-hidden="true"></i>O certificado desta atividade foi revogado pela organização em {{ registration.certificate.revoked_at|date:'d/m/Y' }}.</div>
+              {% elif registration.certificate %}
                 <div class="small mb-2">Certificado emitido. Código de validação: <strong class="tabular">{{ registration.certificate.code }}</strong></div>
               {% elif registration.status == 'CONFIRMED' and activity.certificate_enabled %}
                 <div class="small text-secondary">Atividade finalizada. O certificado exige pelo menos {{ activity.min_attendance_percent }}% de frequência.</div>
               {% else %}
                 <div class="small text-secondary">Atividade finalizada.</div>
               {% endif %}
+            {% elif registration.offer_pending %}
+              <div class="alert alert-warning small mb-2"><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>Abriu uma vaga para você! Confirme até <strong>{{ registration.offer_expires_at|date:'d/m \à\s H:i' }}</strong>; depois disso, ela passa para a próxima pessoa da fila.</div>
+              <div class="d-flex gap-3 align-items-center flex-wrap">
+                <form method="post" action="{% url 'confirm_offer' registration.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm"><i class="bi bi-check2"></i>Confirmar minha vaga</button></form>
+                <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'cancel_registration' registration.pk %}">Não quero mais</a>
+              </div>
             {% elif registration.status == 'CONFIRMED' %}
-              <form method="post" action="{% url 'cancel_registration' registration.pk %}">
-                {% csrf_token %}
-                <button class="btn btn-link btn-sm text-danger p-0">Cancelar inscrição</button>
-              </form>
+              {% if registration.started %}
+                <div class="small text-secondary">A atividade já começou. Para qualquer mudança na inscrição, fale com a organização.</div>
+              {% else %}
+                <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'cancel_registration' registration.pk %}">Cancelar inscrição</a>
+              {% endif %}
             {% elif registration.status == 'WAITLISTED' %}
               <p class="small text-secondary mb-2">Se abrir uma vaga, sua inscrição é confirmada automaticamente e você recebe o QR Code por e-mail.</p>
-              <form method="post" action="{% url 'cancel_registration' registration.pk %}">
-                {% csrf_token %}
-                <button class="btn btn-link btn-sm text-danger p-0">Sair da lista de espera</button>
-              </form>
+              <a class="btn btn-link btn-sm text-danger p-0" href="{% url 'cancel_registration' registration.pk %}">Sair da lista de espera</a>
             {% endif %}
             </div>
           </div>
 
           <div class="ticket-stub">
-            {% if activity.status == 'FINISHED' and registration.certificate %}
+            {% if activity.status == 'FINISHED' and registration.certificate.is_revoked %}
+              <i class="bi bi-x-octagon fs-1 text-secondary" aria-hidden="true"></i>
+              <small>Certificado revogado</small>
+            {% elif activity.status == 'FINISHED' and registration.certificate and registration.survey_blocks_certificate %}
+              <i class="bi bi-lock fs-1 text-secondary" aria-hidden="true"></i>
+              <small>Responda a avaliação para liberar o certificado</small>
+            {% elif activity.status == 'FINISHED' and registration.certificate %}
               <i class="bi bi-award fs-1 text-primary" aria-hidden="true"></i>
               <a class="btn btn-primary btn-sm" href="{% url 'certificate_download' registration.certificate.code %}" target="_blank">Baixar certificado (PDF)</a>
+            {% elif registration.offer_pending %}
+              <i class="bi bi-hourglass-split fs-1 text-warning" aria-hidden="true"></i>
+              <small>Confirme a vaga para receber o QR Code</small>
             {% elif registration.status == 'CONFIRMED' and activity.status == 'PUBLISHED' %}
               <img src="{% url 'registration_qr' registration.pk %}" class="qr" alt="QR Code da inscrição em {{ activity.title }}">
               <small>Apresente na entrada</small>

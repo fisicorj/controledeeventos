@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Alguém tentou usar este e-mail para criar uma conta, ou para trocar o e-mail de outra conta, no {{ institution }}. Este endereço já é o da sua conta (usuário: {{ username }}), então nada foi alterado e nenhum código foi enviado.
+
+Se foi você, entre com o seu usuário. Esqueceu a senha? Crie uma nova em:
+{{ reset_url }}
+
+Se não foi você, ignore esta mensagem: a sua conta continua como estava.
+
+{{ institution }}
+{% endautoescape %}

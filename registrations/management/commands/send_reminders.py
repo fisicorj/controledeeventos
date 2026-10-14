@@ -24,6 +24,7 @@ class Command(BaseCommand):
             Registration.objects.filter(
                 status=Registration.Status.CONFIRMED,
                 reminder_sent_at__isnull=True,
+                offer_expires_at__isnull=True,  # vaga oferecida e ainda não confirmada não recebe o lembrete
                 activity__status=Activity.Status.PUBLISHED,
                 activity__start_date__gt=now,
                 activity__start_date__lte=now + timedelta(hours=horas),

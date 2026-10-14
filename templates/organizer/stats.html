@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Números | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>Números da atividade</h1>
+    <p>{{ activity.start_date|date:'d/m/Y' }} · {{ activity.get_status_display }} · {{ activity.capacity }} vagas</p>
+  </div>
+
+  <div class="kpi-grid mb-4">
+    <div class="kpi"><span class="kpi-value">{{ n.confirmed }}</span><span class="kpi-label">inscritos confirmados</span><span class="kpi-sub">{{ n.occupancy }}% das vagas</span></div>
+    <div class="kpi"><span class="kpi-value">{{ n.waitlisted }}</span><span class="kpi-label">na lista de espera</span></div>
+    <div class="kpi"><span class="kpi-value">{{ n.cancelled }}</span><span class="kpi-label">desistências</span><span class="kpi-sub">{{ n.dropout }}% de quem se inscreveu</span></div>
+    <div class="kpi"><span class="kpi-value">{% if n.session_count %}{{ n.attendance_rate }}%{% else %}-{% endif %}</span><span class="kpi-label">comparecimento</span><span class="kpi-sub">{% if n.session_count %}{{ n.attended }} de {{ n.confirmed }} vieram pelo menos uma vez{% else %}sem sessões cadastradas{% endif %}</span></div>
+    {% if n.avg_frequency is not None %}<div class="kpi"><span class="kpi-value">{{ n.avg_frequency }}%</span><span class="kpi-label">frequência média</span><span class="kpi-sub">{{ n.session_count }} sess{{ n.session_count|pluralize:"ão,ões" }}</span></div>{% endif %}
+    <div class="kpi"><span class="kpi-value">{{ n.certificates }}</span><span class="kpi-label">certificados</span></div>
+    {% if n.survey_avg is not None %}<div class="kpi"><span class="kpi-value">{{ n.survey_avg }}</span><span class="kpi-label">nota na pesquisa</span><span class="kpi-sub">{{ n.survey_count }} resposta{{ n.survey_count|pluralize }}</span></div>{% endif %}
+  </div>
+
+  <section class="panel mb-4">
+    <div class="panel-head">
+      <div><h2>Inscrições por dia</h2><p>Novas inscrições (incluindo lista de espera) e desistências.</p></div>
+      <div class="chart-legend small"><span><i class="swatch swatch-new"></i>Inscrições</span><span><i class="swatch swatch-drop"></i>Desistências</span></div>
+    </div>
+    <div class="panel-body">
+      {% if n.timeline %}
+        <div class="day-chart" role="img" aria-label="Gráfico de inscrições e desistências por dia; a tabela abaixo traz os números">
+          {% for d in n.timeline %}
+            <div class="day-col" title="{{ d.day|date:'d/m' }}: {{ d.new }} inscriç{{ d.new|pluralize:'ão,ões' }}, {{ d.dropped }} desistência{{ d.dropped|pluralize }} · total acumulado {{ d.total }}">
+              <div class="day-bars">
+                <span class="bar-new" style="height: {{ d.h_new }}%"></span>
+                <span class="bar-drop" style="height: {{ d.h_drop }}%"></span>
+              </div>
+              <span class="day-label">{{ d.day|date:'d/m' }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <details class="mt-3 small">
+          <summary>Ver em tabela</summary>
+          <table class="table table-sm mt-2 tabular">
+            <thead><tr><th>Dia</th><th>Inscrições</th><th>Desistências</th><th>Total acumulado</th></tr></thead>
+            <tbody>{% for d in n.timeline %}<tr><td>{{ d.day|date:'d/m/Y' }}</td><td>{{ d.new }}</td><td>{{ d.dropped }}</td><td>{{ d.total }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </details>
+      {% else %}
+        <p class="text-secondary mb-0">Ainda não há inscrições.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="row g-4 mb-4">
+    {% for b in n.breakdowns %}
+      <div class="col-lg-6">
+        <section class="panel h-100">
+          <div class="panel-head"><div><h2>{{ b.title }}</h2><p>Inscritos confirmados.</p></div></div>
+          <div class="panel-body">
+            {% for item in b.items %}
+              <div class="hbar">
+                <div class="hbar-text"><span>{{ item.label }}</span><span class="tabular">{{ item.count }} <span class="text-secondary">({{ item.percent }}%)</span></span></div>
+                <div class="hbar-track"><span style="width: {{ item.width }}%"></span></div>
+              </div>
+            {% empty %}
+              <p class="text-secondary mb-0">Sem dados.</p>
+            {% endfor %}
+          </div>
+        </section>
+      </div>
+    {% endfor %}
+  </div>
+
+  <section class="panel mb-4">
+    <div class="panel-head"><div><h2>Comparação entre edições</h2><p>Edições ligadas pelo botão "Duplicar".</p></div></div>
+    {% if comparison %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0 tabular">
+          <thead><tr><th>Edição</th><th>Vagas</th><th>Confirmados</th><th>Desistências</th><th>Comparecimento</th><th>Certificados</th><th>Nota</th></tr></thead>
+          <tbody>
+            {% for e in comparison %}
+              <tr{% if e.is_current %} class="table-active"{% endif %}>
+                <td><a href="{% url 'activity_stats' e.activity.id %}">{{ e.activity.title }}</a><div class="small text-secondary">{{ e.activity.start_date|date:'d/m/Y' }}{% if e.is_current %} · esta{% endif %}</div></td>
+                <td>{{ e.activity.capacity }}</td>
+                <td>{{ e.confirmed }} <span class="small text-secondary">({{ e.occupancy }}%)</span></td>
+                <td>{{ e.cancelled }}</td>
+                <td>{% if e.session_count %}{{ e.attendance_rate }}%{% else %}-{% endif %}</td>
+                <td>{{ e.certificates }}</td>
+                <td>{{ e.survey_avg|default:'-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty small">Esta é a primeira edição. Para a próxima, use "Duplicar" na gestão da atividade: as edições ficam ligadas e aparecem aqui lado a lado.</div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

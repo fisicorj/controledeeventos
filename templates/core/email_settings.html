@@ -67,9 +67,43 @@
       <div class="col-md-6">{% include 'core/_field.html' with field=form.reply_to %}</div>
       <div class="col-md-6">{% include 'core/_field.html' with field=form.timeout %}</div>
     </div>
+    <h2 class="h5 mt-2">Alertas</h2>
+    {% include 'core/_field.html' with field=form.error_alert_email %}
 
     <div><button class="btn btn-primary">Salvar</button></div>
   </form>
+
+  <section class="panel panel-body mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <h2 class="h5">Fila de envio</h2>
+        <p class="small text-secondary mb-2">Os avisos em massa (finalização com certificados, comunicados, certificados avulsos, confirmações) entram numa fila e saem em segundo plano, um por um. Se o servidor de e-mail falhar, o sistema tenta de novo sozinho algumas vezes.</p>
+      </div>
+      {% if queue.retryable %}
+        <form method="post" action="{% url 'outbox_retry' %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-repeat"></i>Tentar de novo as falhas dos últimos {{ queue.retry_days }} dias ({{ queue.retryable }})</button></form>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-4 flex-wrap small">
+      <span>Na fila: <strong class="tabular">{{ queue.pending }}</strong>{% if queue.retrying %} <span class="text-warning">({{ queue.retrying }} aguardando nova tentativa)</span>{% endif %}</span>
+      <span>Enviados nas últimas 24 h: <strong class="tabular">{{ queue.sent_today }}</strong></span>
+      <span>Falharam: <strong class="tabular {% if queue.failed %}text-danger{% endif %}">{{ queue.failed }}</strong></span>
+    </div>
+    {% if queue.failed > queue.retryable %}
+      <p class="small text-secondary mt-2 mb-0">Falhas com mais de {{ queue.retry_days }} dias não são reenviadas (o aviso chegaria fora de hora). Destinatário e conteúdo delas são apagados junto com os e-mails enviados antigos.</p>
+    {% endif %}
+    {% if queue.recent_failures %}
+      <div class="table-responsive mt-3">
+        <table class="table table-sm small align-middle mb-0">
+          <thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Erro</th></tr></thead>
+          <tbody>
+            {% for e in queue.recent_failures %}
+              <tr><td class="text-nowrap">{{ e.created_at|date:'d/m H:i' }}</td><td>{{ e.to }}</td><td>{{ e.subject|truncatechars:60 }}</td><td class="text-danger">{{ e.last_error|truncatechars:140 }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
 
   <form method="post" action="{% url 'email_test' %}" class="panel panel-body mb-4">
     {% csrf_token %}
@@ -83,16 +117,6 @@
       <button class="btn btn-outline-primary">Enviar teste</button>
     </div>
   </form>
+  <div hidden data-port-defaults="{{ default_ports_json }}" data-security="{{ form.security.id_for_label }}" data-port="{{ form.port.id_for_label }}"></div>
 </main>
-<script>
-  // Ao trocar o tipo de segurança, sugere a porta padrão (só se a porta atual for a padrão de outro tipo).
-  (function () {
-    const ports = {{ default_ports_json|safe }};
-    const security = document.getElementById('{{ form.security.id_for_label }}');
-    const port = document.getElementById('{{ form.port.id_for_label }}');
-    security.addEventListener('change', () => {
-      if (Object.values(ports).map(String).includes(port.value)) port.value = ports[security.value];
-    });
-  })();
-</script>
 {% endblock %}

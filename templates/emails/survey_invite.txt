@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Obrigado por participar de "{{ activity.title }}".
+
+Conte para a gente como foi: são só uma nota de 0 a 10 e, se quiser, um comentário. Leva menos de um minuto e ajuda a melhorar as próximas edições.
+
+Responder: {{ survey_url }}
+{% if survey_required %}
+Atenção: o certificado desta atividade é liberado depois que você responder.
+{% endif %}
+{{ institution }}
+{% endautoescape %}

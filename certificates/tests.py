@@ -45,8 +45,13 @@ class CertificateFlowTests(TestCase):
         self.assertEqual(certificate.registration, self.reg_ana)
         self.assertEqual(certificate.participant_name, 'Ana Souza')
         self.assertEqual(certificate.attendance_percent, 75)
-        self.assertEqual([m.to[0] for m in mail.outbox], ['ana@exemplo.com'])
-        self.assertIn(certificate.code, mail.outbox[0].body)
+        # Ana recebe o certificado (com o convite da pesquisa); Bia, só o convite da pesquisa.
+        by_recipient = {m.to[0]: m for m in mail.outbox}
+        self.assertEqual(sorted(by_recipient), ['ana@exemplo.com', 'bia@exemplo.com'])
+        self.assertIn(certificate.code, by_recipient['ana@exemplo.com'].body)
+        self.assertIn('/avaliacao/', by_recipient['ana@exemplo.com'].body)
+        self.assertNotIn('certificado', by_recipient['bia@exemplo.com'].subject)
+        self.assertIn('/avaliacao/', by_recipient['bia@exemplo.com'].body)
 
     def test_emitir_pendentes_e_idempotente(self):
         self.finish()

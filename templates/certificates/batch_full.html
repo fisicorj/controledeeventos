@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Nova emissão avulsa | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a></div>
+    <h1>Nova emissão avulsa</h1>
+    <ol class="steps"><li class="current"><span class="dot">1</span>Planilha completa</li><li><span class="dot">2</span>Conferir a prévia</li><li><span class="dot">3</span>Emitir</li></ol>
+  </div>
+  {% include 'certificates/_new_modes.html' with mode='full' %}
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    <section class="panel mb-4">
+      <div class="panel-head">
+        <div><h2>Planilha completa</h2><p>Dados do evento e participantes no mesmo arquivo. Um evento por planilha.</p></div>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'batch_template' %}?modelo=completo"><i class="bi bi-file-earmark-spreadsheet"></i>Baixar modelo da planilha completa</a>
+      </div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=sheet_form.spreadsheet %}
+        {% include 'core/_field.html' with field=sheet_form.fix_case %}
+        <div class="table-responsive">
+          <table class="table table-sm small mb-2">
+            <thead><tr><th>Coluna</th><th>Como preencher</th></tr></thead>
+            <tbody>
+              <tr><td class="fw-semibold">Evento</td><td>Obrigatória. Título como sai no certificado.</td></tr>
+              <tr><td class="fw-semibold">Tipo</td><td>Curso, Evento ou Agenda. Em branco: Evento.</td></tr>
+              <tr><td class="fw-semibold">Início</td><td>Obrigatória. dd/mm/aaaa (ou data do Excel).</td></tr>
+              <tr><td class="fw-semibold">Término</td><td>Em branco: o mesmo dia do início.</td></tr>
+              <tr><td class="fw-semibold">Carga horária</td><td>Só o número de horas. Em branco: o certificado não cita a duração.</td></tr>
+              <tr><td class="fw-semibold">Data do certificado</td><td>A data impressa no certificado. Em branco: a data de término.</td></tr>
+              <tr><td class="fw-semibold">Nome</td><td>Obrigatória. Um participante por linha.</td></tr>
+              <tr><td class="fw-semibold">Matrícula, Turma, E-mail</td><td>Opcionais, como na importação de nomes.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small text-secondary mb-0"><i class="bi bi-info-circle me-1" aria-hidden="true"></i>As colunas do evento podem ser preenchidas só na primeira linha. Se alguma linha trouxer um evento diferente, a planilha é recusada e a mensagem diz qual linha conferir. Nada é emitido antes da prévia.</p>
+      </div>
+    </section>
+    <div class="d-flex gap-2 justify-content-end">
+      <a class="btn btn-outline-secondary" href="{% url 'batch_list' %}">Cancelar</a>
+      <button class="btn btn-primary">Ver prévia<i class="bi bi-arrow-right ms-1 me-0"></i></button>
+    </div>
+  </form>
+</main>
+{% endblock %}

@@ -12,6 +12,32 @@
       <a class="btn btn-primary" href="{% url 'activity_create' %}"><i class="bi bi-plus-lg"></i>Nova atividade</a>
     </div>
   </div>
+  <form method="get" class="panel panel-body mb-4" role="search">
+    <div class="row g-3 align-items-end">
+      <div class="col-lg-5">
+        <label class="form-label" for="f-q">Buscar</label>
+        <input class="form-control" type="search" id="f-q" name="q" value="{{ query }}" placeholder="Título da atividade">
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <label class="form-label" for="f-semestre">Semestre</label>
+        <select class="form-select" id="f-semestre" name="semestre">
+          <option value="">Todos</option>
+          {% for value, label in semesters %}<option value="{{ value }}"{% if value == semester %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="f-situacao">Situação</label>
+        <select class="form-select" id="f-situacao" name="situacao">
+          <option value="">Todas</option>
+          {% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-2 d-flex gap-2">
+        <button class="btn btn-primary flex-grow-1"><i class="bi bi-funnel"></i>Filtrar</button>
+        {% if filtered %}<a class="btn btn-outline-secondary" href="{% url 'organizer_dashboard' %}" aria-label="Limpar filtros"><i class="bi bi-x-lg"></i></a>{% endif %}
+      </div>
+    </div>
+  </form>
   <div class="panel">
     <div class="table-responsive">
       <table class="table align-middle">
@@ -39,7 +65,7 @@
                 <div class="btn-group">
                   <button class="btn btn-sm btn-outline-secondary btn-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais ações para {{ a.title }}"><i class="bi bi-three-dots"></i></button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="{% url 'activity_detail' a.id %}"><i class="bi bi-eye"></i>{% if a.status == 'PUBLISHED' %}Ver{% else %}Pré-visualizar{% endif %}</a></li>
+                    <li><a class="dropdown-item" href="{{ a.get_absolute_url }}"><i class="bi bi-eye"></i>{% if a.status == 'PUBLISHED' %}Ver{% else %}Pré-visualizar{% endif %}</a></li>
                     <li><a class="dropdown-item" href="{% url 'activity_edit' a.id %}"><i class="bi bi-pencil"></i>Editar</a></li>
                     {% if not a.registration_total %}
                       <li><a class="dropdown-item text-danger" href="{% url 'activity_delete' a.id %}"><i class="bi bi-trash"></i>Excluir</a></li>
@@ -51,11 +77,12 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="5"><div class="empty-state"><i class="bi bi-calendar-plus"></i>Nenhuma atividade ainda. <a href="{% url 'activity_create' %}">Criar a primeira</a></div></td></tr>
+            <tr><td colspan="5"><div class="empty-state"><i class="bi bi-calendar-plus"></i>{% if filtered %}Nenhuma atividade com estes filtros. <a href="{% url 'organizer_dashboard' %}">Ver todas</a>{% else %}Nenhuma atividade ainda. <a href="{% url 'activity_create' %}">Criar a primeira</a>{% endif %}</div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  {% include 'core/_pager.html' with label='atividades' %}
 </main>
 {% endblock %}

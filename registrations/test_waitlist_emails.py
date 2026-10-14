@@ -9,6 +9,7 @@ from django.urls import reverse
 from accounts.models import User
 from activities.models import Activity, RegistrationQuestion
 from activities.test_utils import local, make_activity, make_user, now
+from core.models import OutgoingEmail
 
 from .models import Registration, RegistrationAnswer
 
@@ -112,7 +113,7 @@ class QuestionsTests(TestCase):
         self.assertContains(detail, 'Precisa de acessibilidade?')
         url = reverse('register_activity', args=[self.activity.id])
         response = self.client.post(url, {f'q_{self.access.id}': 'Sim'})
-        self.assertContains(response, 'Confira as respostas')
+        self.assertContains(response, 'Confira os dados do formulário')
         self.assertFalse(Registration.objects.exists())
         self.assertContains(response, 'value="Sim" selected')  # o que já foi respondido continua preenchido
         self.client.post(url, {f'q_{self.course.id}': 'GTI', f'q_{self.access.id}': 'Sim'})
@@ -152,10 +153,14 @@ class EmailTests(TestCase):
     @override_settings(EMAIL_BACKEND='registrations.test_waitlist_emails.BrokenBackend')
     def test_falha_no_email_nao_impede_inscricao(self):
         self.client.force_login(make_user('ana'))
-        with self.assertLogs('registrations.notifications', 'ERROR'), self.captureOnCommitCallbacks(execute=True):
+        with self.assertLogs('core.outbox', 'WARNING'), self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(reverse('register_activity', args=[self.activity.id]), follow=True)
         self.assertContains(response, 'Inscrição confirmada')
         self.assertTrue(Registration.objects.exists())
+        # o e-mail fica na fila para uma nova tentativa, sem perder a mensagem
+        queued = OutgoingEmail.objects.get()
+        self.assertEqual((queued.status, queued.attempts), (OutgoingEmail.Status.PENDING, 1))
+        self.assertIn('fora do ar', queued.last_error)
 
     def test_cancelamento_da_atividade_avisa_inscritos_e_fila(self):
         Registration.objects.create(user=make_user('ana'), activity=self.activity)
@@ -203,6 +208,9 @@ class BrokenBackend:
         pass
 
     def __enter__(self):
+        raise ConnectionRefusedError('servidor SMTP fora do ar')
+
+    def open(self):
         raise ConnectionRefusedError('servidor SMTP fora do ar')
 
     def __exit__(self, *args):

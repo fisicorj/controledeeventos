@@ -2,7 +2,7 @@
 {% block title %}Cadastro | {{ portal.portal_name }}{% endblock %}
 {% block side_title %}Crie sua conta e participe{% endblock %}
 {% block heading %}Criar conta{% endblock %}
-{% block intro %}<p class="text-secondary">Com a conta você se inscreve nas atividades e acompanha QR Codes e certificados.</p>{% endblock %}
+{% block intro %}<p class="text-secondary">Com a conta você se inscreve nas atividades e acompanha QR Codes e certificados.{% if domains %} Alunos: usem o e-mail institucional ({% for d in domains %}@{{ d }}{% if not forloop.last %} ou {% endif %}{% endfor %}) e a mesma matrícula dele. Convidados podem informar o CPF.{% endif %}</p>{% endblock %}
 {% block form %}
 <form method="post" novalidate>
   {% csrf_token %}

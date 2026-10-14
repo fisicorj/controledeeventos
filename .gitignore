@@ -17,6 +17,7 @@ htmlcov/
 
 # Django
 media/
+private_media/
 staticfiles/
 *.sqlite3
 *.log

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar identidade | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:560px">
+  <div class="panel panel-body my-5">
+    <i class="bi bi-shield-check fs-1 text-primary" aria-hidden="true"></i>
+    <h1 class="h3 mt-2">Confirme que é você</h1>
+    <p>Esta ação é sensível (revogar certificado, cancelar emissão ou mudar a configuração de e-mail). Confirme sua identidade para continuar; a confirmação vale por {{ minutes }} minutos.</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-primary w-100 py-2 mt-3">Confirmar</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

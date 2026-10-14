@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}{{ batch.title }} | Emissão avulsa{% endblock %}
+{% block meta %}{% if zip_export.status == 'PENDING' or zip_export.status == 'RUNNING' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block content %}
 <main class="container">
   <div class="page-head">
@@ -14,7 +15,21 @@
         </div>
       </div>
       <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-primary{% if not certificates %} disabled{% endif %}" href="{% url 'batch_zip' batch.pk %}"><i class="bi bi-file-earmark-zip"></i>Baixar todos (ZIP)</a>
+        {% if zip_direct %}
+          <a class="btn btn-primary{% if not certificates %} disabled{% endif %}" href="{% url 'batch_zip' batch.pk %}"><i class="bi bi-file-earmark-zip"></i>Baixar todos (ZIP)</a>
+        {% elif zip_export.status == 'READY' %}
+          <a class="btn btn-primary" href="{% url 'batch_zip_file' batch.pk zip_export.pk %}"><i class="bi bi-file-earmark-zip"></i>Baixar ZIP ({{ zip_export.count }}, gerado às {{ zip_export.finished_at|time:'H:i' }})</a>
+          <form method="post" action="{% url 'batch_zip_request' batch.pk %}">{% csrf_token %}
+            <button class="btn btn-outline-secondary" title="Monta de novo, com as alterações feitas depois"><i class="bi bi-arrow-clockwise"></i>Gerar de novo</button>
+          </form>
+        {% elif zip_export.status == 'PENDING' or zip_export.status == 'RUNNING' %}
+          <button class="btn btn-primary" disabled><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Gerando ZIP...</button>
+        {% else %}
+          <form method="post" action="{% url 'batch_zip_request' batch.pk %}">{% csrf_token %}
+            <button class="btn btn-primary"><i class="bi bi-file-earmark-zip"></i>Gerar ZIP de todos</button>
+          </form>
+          {% if zip_export.status == 'FAILED' %}<span class="small text-danger align-self-center">A última tentativa falhou: {{ zip_export.error }}</span>{% endif %}
+        {% endif %}
         <div class="btn-group">
           <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Mais</button>
           <ul class="dropdown-menu dropdown-menu-end">
@@ -23,7 +38,7 @@
               <li><a class="dropdown-item" href="{% url 'batch_add' batch.pk %}"><i class="bi bi-person-plus"></i>Adicionar participantes</a></li>
               <li><a class="dropdown-item" href="{% url 'batch_edit' batch.pk %}"><i class="bi bi-pencil"></i>Editar dados do evento</a></li>
             {% endif %}
-            {% if user.is_superuser or user.role == 'ADMIN' %}
+            {% if user_is_admin %}
               <li><a class="dropdown-item" href="{% url 'certificate_audit' %}?lote={{ batch.pk }}"><i class="bi bi-journal-text"></i>Auditoria completa do lote</a></li>
             {% endif %}
             {% if not batch.is_cancelled %}
@@ -46,10 +61,12 @@
         <div>
           <h2>Envio por e-mail</h2>
           <p>{{ with_email }} participante{{ with_email|pluralize }} com e-mail na planilha · {% if pending_email %}{{ pending_email }} ainda não recebe{{ pending_email|pluralize:"u,ram" }}{% else %}todos já receberam{% endif %}. O PDF vai anexado.</p>
+          {% if queue.pending %}<p class="text-primary mb-0"><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>{{ queue.pending }} e-mail{{ queue.pending|pluralize }} na fila de envio. <a href="{% url 'batch_detail' batch.pk %}">Atualizar</a></p>{% endif %}
+          {% if queue.failed and pending_email %}<p class="text-danger small mb-0"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ queue.failed }} envio{{ queue.failed|pluralize }} falhou depois de várias tentativas{% if last_failure %} ({{ last_failure|truncatechars:160 }}){% endif %}. Confira o endereço ou a configuração de e-mail e use "Enviar para pendentes".</p>{% endif %}
         </div>
         {% if email_enabled %}
           <div class="d-flex gap-2 flex-wrap">
-            {% if pending_email %}
+            {% if pending_email and not queue.pending %}
               <form method="post" action="{% url 'batch_email' batch.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm"><i class="bi bi-send"></i>Enviar para {{ pending_email }} pendente{{ pending_email|pluralize }}</button></form>
             {% endif %}
             {% if pending_email != with_email %}
@@ -57,7 +74,7 @@
             {% endif %}
           </div>
         {% else %}
-          <span class="small text-secondary">O envio de e-mails está desligado.{% if user.is_superuser or user.role == 'ADMIN' %} <a href="{% url 'email_settings' %}">Configurar</a>{% endif %}</span>
+          <span class="small text-secondary">O envio de e-mails está desligado.{% if user_is_admin %} <a href="{% url 'email_settings' %}">Configurar</a>{% endif %}</span>
         {% endif %}
       </div>
     </section>
@@ -68,11 +85,18 @@
       <div><h2>Certificados ({{ certificates|length }})</h2><p>Cada um tem um código e um QR Code que levam à página de validação.</p></div>
       {% if not batch.is_cancelled %}<a class="btn btn-sm btn-outline-primary" href="{% url 'batch_add' batch.pk %}"><i class="bi bi-person-plus"></i>Adicionar participantes</a>{% endif %}
     </div>
+    {% if certificates|length > 20 or query %}
+      <form method="get" class="d-flex gap-2 px-4 pt-3" role="search">
+        <input class="form-control" type="search" name="busca" value="{{ query }}" placeholder="Buscar por nome, matrícula ou turma" aria-label="Buscar certificados">
+        <button class="btn btn-outline-primary">Buscar</button>
+        {% if query %}<a class="btn btn-outline-secondary" href="{% url 'batch_detail' batch.pk %}">Limpar</a>{% endif %}
+      </form>
+    {% endif %}
     <div class="table-responsive">
       <table class="table align-middle mb-0">
         <thead><tr><th>Nome</th><th>Matrícula</th>{% if has_group %}<th>Turma</th>{% endif %}{% if with_email %}<th>E-mail</th>{% endif %}<th>Código</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
         <tbody>
-          {% for c in certificates %}
+          {% for c in page.object_list %}
             <tr>
               <td class="fw-semibold">{{ c.participant_name }}</td>
               <td class="tabular">{{ c.participant_document|default:'-' }}</td>
@@ -81,17 +105,19 @@
               <td><a class="tabular small" href="{% url 'certificate_verify_code' c.code %}" target="_blank">{{ c.code }}</a></td>
               <td class="text-end text-nowrap">
                 <a class="btn btn-sm btn-outline-primary" href="{% url 'certificate_download' c.code %}" target="_blank"><i class="bi bi-filetype-pdf"></i>PDF</a>
+{% if not batch.is_cancelled %}<a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_correct' c.code %}" aria-label="Corrigir nome ou matrícula de {{ c.participant_name }}" title="Corrigir nome ou matrícula"><i class="bi bi-pencil"></i></a>{% endif %}
 <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'batch_certificate_revoke' batch.pk c.code %}" aria-label="Revogar certificado de {{ c.participant_name }}" title="Revogar"><i class="bi bi-x-octagon"></i></a>
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6"><div class="empty-state"><i class="bi bi-people"></i>Nenhum certificado válido neste lote.{% if not batch.is_cancelled %} <a href="{% url 'batch_add' batch.pk %}">Adicionar participantes</a>{% endif %}</div></td></tr>
+            <tr><td colspan="6"><div class="empty-state"><i class="bi bi-people"></i>{% if query %}Ninguém encontrado com “{{ query }}”.{% else %}Nenhum certificado válido neste lote.{% if not batch.is_cancelled %} <a href="{% url 'batch_add' batch.pk %}">Adicionar participantes</a>{% endif %}{% endif %}</div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
-  <p class="small text-secondary mt-3"><i class="bi bi-info-circle me-1"></i>Nome errado? Revogue o certificado (informando o motivo) e adicione a pessoa de novo com a planilha corrigida. Ela recebe um código novo; o antigo passa a aparecer como revogado na validação.</p>
+  {% include 'core/_pager.html' with label='certificados' %}
+  <p class="small text-secondary mt-3"><i class="bi bi-info-circle me-1"></i>Nome ou matrícula errados? Use o lápis para corrigir: o código continua o mesmo e a correção fica no histórico. Para tirar alguém do lote, revogue o certificado informando o motivo.</p>
 
   {% if revoked %}
     <section class="panel mt-4">
@@ -118,7 +144,7 @@
   <section class="panel mt-4">
     <div class="panel-head">
       <div><h2>Histórico</h2><p>Registro permanente das ações neste lote. Não pode ser alterado nem apagado.</p></div>
-      {% if user.is_superuser or user.role == 'ADMIN' %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'certificate_audit' %}?lote={{ batch.pk }}"><i class="bi bi-journal-text"></i>Ver tudo</a>{% endif %}
+      {% if user_is_admin %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'certificate_audit' %}?lote={{ batch.pk }}"><i class="bi bi-journal-text"></i>Ver tudo</a>{% endif %}
     </div>
     {% include 'certificates/_events.html' with events=events compact=True %}
   </section>

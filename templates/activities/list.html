@@ -20,7 +20,7 @@
       {% endfor %}
     </div>
   </form>
-  {% if query or kind %}<p class="text-secondary mb-3">{{ activities|length }} resultado{{ activities|length|pluralize }}{% if query %} para “{{ query }}”{% endif %}.</p>{% endif %}
+  {% if query or kind %}<p class="text-secondary mb-3">{{ page.paginator.count }} resultado{{ page.paginator.count|pluralize }}{% if query %} para “{{ query }}”{% endif %}.</p>{% endif %}
   <div class="row g-4">
     {% for activity in activities %}
       {% include 'activities/_card.html' %}
@@ -33,5 +33,6 @@
       </div>
     {% endfor %}
   </div>
+  {% include 'core/_pager.html' with label='atividades' %}
 </main>
 {% endblock %}

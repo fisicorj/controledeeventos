@@ -1,0 +1,4 @@
+<ul class="nav nav-pills mb-4" aria-label="Como informar os dados do evento">
+  <li class="nav-item"><a class="nav-link{% if mode == 'form' %} active{% endif %}"{% if mode == 'form' %} aria-current="page"{% endif %} href="{% url 'batch_new' %}"><i class="bi bi-keyboard me-1" aria-hidden="true"></i>Digitar os dados do evento</a></li>
+  <li class="nav-item"><a class="nav-link{% if mode == 'full' %} active{% endif %}"{% if mode == 'full' %} aria-current="page"{% endif %} href="{% url 'batch_full' %}"><i class="bi bi-file-earmark-spreadsheet me-1" aria-hidden="true"></i>Planilha completa</a></li>
+</ul>

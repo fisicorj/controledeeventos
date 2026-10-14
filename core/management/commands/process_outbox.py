@@ -1,0 +1,95 @@
+import time
+
+from django.core.management.base import BaseCommand
+from django.db import close_old_connections
+
+from core import outbox
+
+UPKEEP_EVERY = 300  # segundos: vagas com prazo vencido e retenção dos e-mails
+REMINDERS_EVERY = 3600  # lembretes de véspera
+MAINTENANCE_EVERY = 86400  # faxina diária (core/maintenance.py)
+
+
+class Command(BaseCommand):
+    help = (
+        'Envia os e-mails da fila. Sem opções, envia o que estiver pendente e termina (para agendar de minuto '
+        'em minuto). Com --continuo, fica rodando como serviço: confere a fila a cada INTERVALO segundos; a cada '
+        '5 minutos devolve à fila de espera as vagas não confirmadas no prazo e apaga o conteúdo dos e-mails '
+        'enviados há mais de OUTBOX_RETENTION_DAYS dias; de hora em hora envia os lembretes de véspera '
+        '(desligue com --sem-lembretes se eles já estiverem agendados no cron); e uma vez por dia faz a faxina '
+        '(run_maintenance).'
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument('--continuo', action='store_true', help='Fica rodando (serviço do Docker, por exemplo).')
+        parser.add_argument('--intervalo', type=int, default=15, help='Segundos entre as conferências (padrão 15).')
+        parser.add_argument(
+            '--sem-lembretes', action='store_true', help='Não envia os lembretes de véspera (já agendados no cron).'
+        )
+
+    def handle(self, *args, continuo, intervalo, sem_lembretes, **options):
+        schedule = [(UPKEEP_EVERY, self.upkeep), (MAINTENANCE_EVERY, self.maintenance)]
+        if not sem_lembretes:
+            schedule.append((REMINDERS_EVERY, self.reminders))
+        last_run = {task: float('-inf') for _, task in schedule}
+        while True:
+            if continuo:
+                for every, task in schedule:
+                    if time.monotonic() - last_run[task] >= every:
+                        last_run[task] = time.monotonic()
+                        task()
+                close_old_connections()  # rodando por dias: renova a conexão com o banco se ela caiu
+            self.zips()
+            sent, failed = outbox.process()
+            if sent or failed or not continuo:
+                self.stdout.write(f'E-mails enviados: {sent}. Falhas: {failed}.')
+            if not continuo:
+                return
+            time.sleep(max(intervalo, 1))
+
+    def zips(self):
+        """ZIPs de lotes grandes pedidos na tela da emissão avulsa (certificates/zips.py)."""
+        from certificates import zips
+
+        try:
+            built = zips.process()
+        except Exception as exc:  # o envio de e-mails não pode parar por causa disso
+            self.stderr.write(f'Falha ao gerar ZIP de certificados: {exc}')
+        else:
+            if built:
+                self.stdout.write(f'ZIPs de certificados gerados: {built}.')
+
+    def upkeep(self):
+        """A cada 5 minutos: devolve à fila as vagas não confirmadas e apaga o conteúdo dos e-mails
+        que passaram do prazo de retenção."""
+        from registrations.services import expire_all_offers
+
+        try:
+            expired = expire_all_offers()
+        except Exception as exc:  # o envio de e-mails não pode parar por causa disso
+            self.stderr.write(f'Falha ao conferir os prazos da lista de espera: {exc}')
+        else:
+            if expired:
+                self.stdout.write(f'Vagas com prazo vencido devolvidas à fila: {expired}.')
+        try:
+            redacted = outbox.redact_sent()
+        except Exception as exc:
+            self.stderr.write(f'Falha ao limpar e-mails antigos: {exc}')
+        else:
+            if redacted:
+                self.stdout.write(f'E-mails antigos com o conteúdo apagado: {redacted}.')
+
+    def reminders(self):
+        """De hora em hora: lembrete de véspera (cada inscrição recebe uma vez só)."""
+        from django.core.management import call_command
+
+        try:
+            call_command('send_reminders', stdout=self.stdout, stderr=self.stderr)
+        except Exception as exc:
+            self.stderr.write(f'Falha ao enviar os lembretes: {exc}')
+
+    def maintenance(self):
+        """Uma vez por dia: sessões vencidas, códigos e contadores antigos, cache de imagens."""
+        from core import maintenance
+
+        maintenance.run(log=self.stdout.write, source='worker')
