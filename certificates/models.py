@@ -2,10 +2,11 @@ import secrets
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from activities.models import Activity
+from core.storage import private_storage as _private_storage
 from registrations.models import Registration
 
 # Sem letras e números que se confundem (0/O, 1/I/L), para facilitar a digitação na validação.
@@ -47,6 +48,10 @@ class CertificateBatch(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=Q(end_date__gte=F('start_date')), name='batch_end_not_before_start'),
+            models.CheckConstraint(condition=Q(issue_date__gte=F('start_date')), name='batch_issue_not_before_start'),
+        ]
         verbose_name = 'emissão avulsa'
         verbose_name_plural = 'emissões avulsas'
 
@@ -91,6 +96,11 @@ class Certificate(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='+'
     )
     revoked_reason = models.TextField('Motivo da revogação', blank=True)
+    # Emissão avulsa com outro e-mail: a própria pessoa vincula pelo código (certificates/claim.py)
+    claimed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='claimed_certificates'
+    )
+    claimed_at = models.DateTimeField('Vinculado em', null=True, blank=True)
 
     class Meta:
         ordering = ['-issued_at']
@@ -113,6 +123,19 @@ class Certificate(models.Model):
     @property
     def is_revoked(self):
         return self.revoked_at is not None
+
+    @property
+    def document_is_cpf(self):
+        from accounts.documents import is_cpf
+
+        return is_cpf(self.participant_document)
+
+    @property
+    def public_document(self):
+        """Documento como aparece na validação pública: CPF mascarado (LGPD); matrícula inteira."""
+        from accounts.documents import mask_cpf
+
+        return mask_cpf(self.participant_document)
 
     @property
     def source_label(self):
@@ -138,6 +161,8 @@ class CertificateEvent(models.Model):
         REVOKED = 'REVOKED', 'Revogado'
         EMAILED = 'EMAILED', 'Enviado por e-mail'
         DOWNLOADED = 'DOWNLOADED', 'PDF baixado'
+        CLAIMED = 'CLAIMED', 'Vinculado a uma conta'
+        UNCLAIMED = 'UNCLAIMED', 'Vínculo desfeito'
 
     created_at = models.DateTimeField('Data e hora', default=timezone.now, editable=False, db_index=True)
     action = models.CharField('Ação', max_length=20, choices=Action.choices, db_index=True)
@@ -192,6 +217,8 @@ class CertificateEvent(models.Model):
 
 
 FIELD_LABELS = {
+    'participant_name': 'Nome',
+    'participant_document': 'Matrícula/CPF',
     'activity_title': 'Título',
     'activity_type': 'Tipo',
     'start_date': 'Início',
@@ -199,3 +226,30 @@ FIELD_LABELS = {
     'workload_hours': 'Carga horária',
     'document_date': 'Data do certificado',
 }
+
+
+class ZipExport(models.Model):
+    """ZIP de um lote grande, montado em segundo plano (DES-02). Ver certificates/zips.py."""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Na fila'
+        RUNNING = 'RUNNING', 'Gerando'
+        READY = 'READY', 'Pronto'
+        FAILED = 'FAILED', 'Falhou'
+
+    batch = models.ForeignKey(CertificateBatch, on_delete=models.CASCADE, related_name='zip_exports')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='+')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    file = models.FileField(upload_to='zips/', storage=_private_storage, blank=True)
+    count = models.PositiveIntegerField(default=0)
+    error = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', 'created_at'], name='zipexport_status_idx')]
+
+    def __str__(self):
+        return f'ZIP do lote {self.batch_id} ({self.get_status_display()})'

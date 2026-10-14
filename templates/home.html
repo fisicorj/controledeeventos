@@ -20,7 +20,7 @@
           <div class="agenda">
             <div class="agenda-head"><span>Agenda</span><a class="small fw-semibold" href="{% url 'activity_list' %}">Ver todas</a></div>
             {% for activity in agenda %}
-              <a class="agenda-item" href="{% url 'activity_detail' activity.pk %}">
+              <a class="agenda-item" href="{{ activity.get_absolute_url }}">
                 {% include 'core/_date.html' with date=activity.start_date size='sm' %}
                 <span>
                   <strong>{{ activity.title }}</strong>

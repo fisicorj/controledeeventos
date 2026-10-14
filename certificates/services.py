@@ -42,9 +42,26 @@ def issue_certificates(activity, request=None):
 
 
 @transaction.atomic
-def finish_activity(activity, request=None):
-    """Encerra a atividade: fecha o check-in de todas as sessões e emite os certificados."""
+def finish_activity(activity, request=None, check_status=True):
+    """Encerra a atividade: fecha o check-in de todas as sessões e emite os certificados.
+
+    Trava a atividade (SELECT ... FOR UPDATE): dois cliques ou duas pessoas ao mesmo tempo não emitem
+    nada em dobro. Devolve None se ela já não estava publicada (alguém finalizou ou cancelou antes)."""
+    from registrations.services import clear_offers, lock_activity
+
+    locked = lock_activity(activity.pk)
+    if check_status and locked.status != Activity.Status.PUBLISHED:
+        return None
     activity.status = Activity.Status.FINISHED
     activity.save(update_fields=['status', 'updated_at'])
     activity.sessions.update(check_in_open=False)
-    return issue_certificates(activity, request=request)
+    clear_offers(activity)
+    issued = issue_certificates(activity, request=request)
+    if activity.survey_enabled:
+        # Quem recebeu certificado já ganha o convite da pesquisa no mesmo e-mail.
+        from registrations.survey import eligible
+
+        certified = {c.registration_id for c in issued}
+        others = [r for r in eligible(activity).select_related('user', 'activity') if r.id not in certified]
+        notifications.notify_survey(others)
+    return issued

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Corrigir certificado | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="panel panel-body my-5">
+    <h1 class="h2">Corrigir certificado</h1>
+    <p class="mb-2"><strong>{{ certificate.activity_title }}</strong> · <span class="tabular">{{ certificate.code }}</span></p>
+    <dl class="row small mb-3">
+      <dt class="col-sm-4">No certificado hoje</dt>
+      <dd class="col-sm-8">{{ certificate.participant_name }}{% if certificate.participant_document %} · {{ certificate.participant_document }}{% endif %}</dd>
+      {% if profile %}
+        <dt class="col-sm-4">No cadastro da pessoa</dt>
+        <dd class="col-sm-8">{{ profile.participant_name }}{% if profile.participant_document %} · {{ profile.participant_document }}{% endif %}</dd>
+      {% endif %}
+    </dl>
+    <div class="alert alert-info small">O código de validação continua o mesmo e o PDF passa a sair com os dados corrigidos. O antes e o depois ficam na auditoria.</div>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-primary">Salvar correção</button>
+        <a class="btn btn-outline-secondary" href="{{ back_url }}">Voltar</a>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Crachás | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>Crachás para imprimir</h1>
+    <p>Nome, tipo de vaga e o QR Code da inscrição (o mesmo do ingresso, serve para o check-in). {{ total }} inscrito{{ total|pluralize }} confirmado{{ total|pluralize }}.</p>
+  </div>
+  <form method="get" target="_blank" class="panel panel-body">
+    <fieldset class="mb-3">
+      <legend class="form-label">Folha</legend>
+      {% for key, label in layouts %}
+        <div class="form-check"><input class="form-check-input" type="radio" name="layout" value="{{ key }}" id="l-{{ key }}"{% if forloop.first %} checked{% endif %}><label class="form-check-label" for="l-{{ key }}">{{ label }}</label></div>
+      {% endfor %}
+    </fieldset>
+    {% if categories %}
+      <div class="mb-3">
+        <label class="form-label" for="categoria">Quem</label>
+        <select class="form-select" name="categoria" id="categoria">
+          <option value="">Todos os confirmados</option>
+          {% for c in categories %}<option value="{{ c.id }}">Só {{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    <div class="row g-3">
+      <div class="col-sm-4">
+        <label class="form-label" for="pular">Pular etiquetas</label>
+        <input class="form-control" type="number" min="0" max="40" value="0" name="pular" id="pular">
+        <div class="form-text">Para reaproveitar uma folha já usada em parte.</div>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label" for="dx">Ajuste horizontal (mm)</label>
+        <input class="form-control" type="number" step="0.5" min="-15" max="15" value="0" name="dx" id="dx">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label" for="dy">Ajuste vertical (mm)</label>
+        <input class="form-control" type="number" step="0.5" min="-15" max="15" value="0" name="dy" id="dy">
+        <div class="form-text">Positivo desce.</div>
+      </div>
+    </div>
+    <div class="alert alert-info small mt-3 mb-3">Imprima em <strong>tamanho real (100%)</strong>, sem "ajustar à página". Faça um teste numa folha comum contra a luz, sobre a folha de etiquetas, antes de usar as etiquetas.</div>
+    <button class="btn btn-primary"><i class="bi bi-printer"></i>Gerar PDF</button>
+  </form>
+</main>
+{% endblock %}

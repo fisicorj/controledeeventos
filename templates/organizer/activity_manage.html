@@ -11,20 +11,23 @@
           <h1 class="mb-1">{{ activity.title }}</h1>
           <div class="d-flex gap-2 align-items-center flex-wrap small">
             <span class="pill {% if activity.status == 'PUBLISHED' %}pill-open{% elif activity.status == 'DRAFT' %}pill-soon{% elif activity.status == 'CANCELLED' %}pill-danger{% else %}pill-muted{% endif %}">{{ activity.get_status_display }}</span>
-            <a href="{% url 'activity_detail' activity.id %}">ver página</a>
+            <a href="{{ activity.get_absolute_url }}">ver página</a>
             <a href="{% url 'activity_edit' activity.id %}">editar</a>
           </div>
         </div>
       </div>
       <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="{% url 'activity_stats' activity.id %}"><i class="bi bi-bar-chart"></i>Números</a>
         <div class="btn-group">
           <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-file-earmark-arrow-down"></i>Relatórios</button>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{% url 'activity_badges' activity.id %}"><i class="bi bi-person-badge"></i>Crachás para imprimir (PDF)</a></li>
             <li><a class="dropdown-item" href="{% url 'report_registrations_csv' activity.id %}"><i class="bi bi-filetype-csv"></i>Inscritos e respostas (CSV/Excel)</a></li>
             <li><a class="dropdown-item" href="{% url 'report_attendance_pdf' activity.id %}" target="_blank"><i class="bi bi-filetype-pdf"></i>Frequência (PDF)</a></li>
             <li><span class="dropdown-item-text small text-secondary">Lista de assinatura: na presença de cada sessão.</span></li>
           </ul>
         </div>
+        <a class="btn btn-outline-secondary" href="{% url 'activity_duplicate' activity.id %}" title="Copiar para a próxima edição"><i class="bi bi-copy"></i>Duplicar</a>
         {% if activity.status == 'PUBLISHED' %}
           <a class="btn btn-outline-primary" href="{% url 'activity_finish' activity.id %}"><i class="bi bi-flag"></i>Finalizar atividade</a>
         {% elif activity.status == 'FINISHED' and activity.certificate_enabled %}
@@ -56,6 +59,7 @@
             <div class="d-flex gap-2 align-items-center flex-wrap">
               {% if s.check_in_open %}<span class="pill pill-open">Check-in aberto</span>{% else %}<span class="pill pill-muted">Check-in fechado</span>{% endif %}
               <a class="btn btn-sm btn-primary" href="{% url 'session_attendance' s.id %}">Presença</a>
+              <a class="btn btn-sm btn-outline-primary btn-icon" href="{% url 'checkin_app' s.id %}" title="Check-in no celular (funciona sem internet)" aria-label="Check-in no celular"><i class="bi bi-phone"></i></a>
               <a class="btn btn-sm btn-outline-secondary" href="{% url 'session_edit' s.id %}">Editar</a>
               <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'session_delete' s.id %}" aria-label="Excluir {{ s.title }}"><i class="bi bi-trash"></i></a>
             </div>
@@ -63,6 +67,26 @@
         {% empty %}
           <div class="empty">Crie uma sessão para controlar presença.</div>
         {% endfor %}
+      </section>
+
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Equipe de check-in</h2><p>Monitores e voluntários que registram presença nesta atividade. Eles veem só a tela de check-in, sem e-mails, relatórios ou configurações.</p></div>
+        </div>
+        {% for person in checkin_staff %}
+          <div class="list-row">
+            <div><strong>{{ person.get_full_name|default:person.username }}</strong> <span class="small text-secondary">{{ person.username }}</span></div>
+            <form method="post" action="{% url 'checkin_staff_remove' activity.id person.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary text-danger" aria-label="Tirar {{ person.get_full_name|default:person.username }} da equipe">Remover</button></form>
+          </div>
+        {% empty %}
+          <div class="empty small">Ninguém além da organização. A pessoa precisa ter conta no portal.</div>
+        {% endfor %}
+        <form method="post" action="{% url 'checkin_staff_add' activity.id %}" class="panel-body d-flex gap-2 flex-wrap">
+          {% csrf_token %}
+          <label class="visually-hidden" for="staff-person">Usuário ou e-mail</label>
+          <input id="staff-person" name="person" class="form-control" style="max-width:320px" placeholder="Usuário de acesso ou e-mail" autocomplete="off">
+          <button class="btn btn-outline-primary"><i class="bi bi-person-plus"></i>Adicionar</button>
+        </form>
       </section>
 
       <section class="panel mb-4">
@@ -83,7 +107,14 @@
                   <td class="text-nowrap">{{ row.count }} / {{ session_count }}{% if session_count %} <span class="text-secondary">({{ row.percent }}%)</span>{% endif %}</td>
                   {% if activity.certificate_enabled %}
                     <td>
-                      {% if row.certified %}<span class="pill pill-open">Emitido</span>
+                      {% if row.certified %}
+                        <span class="pill pill-open">Emitido</span>
+                        <span class="text-nowrap ms-1">
+                          <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_download' row.certificate.code %}" target="_blank" title="PDF" aria-label="PDF do certificado de {{ row.user.get_full_name|default:row.user.username }}"><i class="bi bi-filetype-pdf"></i></a>
+                          <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_correct' row.certificate.code %}" title="Corrigir nome ou matrícula" aria-label="Corrigir certificado de {{ row.user.get_full_name|default:row.user.username }}"><i class="bi bi-pencil"></i></a>
+                          <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'certificate_revoke' row.certificate.code %}" title="Revogar" aria-label="Revogar certificado de {{ row.user.get_full_name|default:row.user.username }}"><i class="bi bi-x-octagon"></i></a>
+                        </span>
+                      {% elif row.certificate %}<span class="pill pill-danger" title="Revogado em {{ row.certificate.revoked_at|date:'d/m/Y H:i' }}: {{ row.certificate.revoked_reason }}">Revogado</span>
                       {% elif session_count and row.percent >= activity.min_attendance_percent %}<span class="pill pill-soon">Apto</span>
                       {% else %}<span class="text-secondary small">-</span>{% endif %}
                     </td>
@@ -99,6 +130,117 @@
     </div>
 
     <div class="col-lg-5">
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Tipos de vaga</h2><p>{% if categories %}Cada tipo tem vagas e lista de espera próprias.{% else %}Todas as {{ activity.capacity }} vagas são iguais.{% endif %}{% if activity.access_code %} Inscrição com código de acesso.{% endif %}</p></div>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'category_create' activity.id %}"><i class="bi bi-plus-lg"></i>Tipo de vaga</a>
+        </div>
+        {% for c in categories %}
+          <div class="list-row">
+            <div>
+              <strong>{{ c.name }}</strong>{% if c.access_code %} <span class="pill pill-muted ms-1"><i class="bi bi-lock" aria-hidden="true"></i>código</span>{% endif %}{% if c.requires_document %} <span class="pill pill-muted ms-1">só alunos</span>{% endif %}
+              <div class="capacity my-1" aria-hidden="true"><span style="width: {% widthratio c.taken c.capacity 100 %}%"></span></div>
+              <div class="small text-secondary tabular">{{ c.taken }} de {{ c.capacity }}{% if c.waiting %} · {{ c.waiting }} na fila{% endif %}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'category_edit' c.id %}">Editar</a>
+              <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'category_delete' c.id %}" aria-label="Excluir {{ c.name }}"><i class="bi bi-trash"></i></a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty small">Exemplos: 80 para alunos e 20 para público externo, ou vagas reservadas por turma (com um código passado só à turma).</div>
+        {% endfor %}
+      </section>
+
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Materiais</h2><p>Liberados depois do evento só para quem participou.</p></div>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'material_create' activity.id %}"><i class="bi bi-plus-lg"></i>Material</a>
+        </div>
+        {% for m in materials %}
+          <div class="list-row">
+            <div>
+              <a class="fw-semibold" href="{% url 'material_open' m.id %}" target="_blank"><i class="bi {% if m.url %}bi-link-45deg{% else %}bi-file-earmark-arrow-down{% endif %} me-1" aria-hidden="true"></i>{{ m.title }}</a>
+              <div class="small text-secondary">{{ m.get_audience_display }} · {% if m.is_released %}liberado{% else %}libera em {{ m.release_at|date:'d/m/Y H:i' }}{% endif %}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'material_edit' m.id %}">Editar</a>
+              <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'material_delete' m.id %}" aria-label="Remover {{ m.title }}"><i class="bi bi-trash"></i></a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty small">Slides, apostila, gravação. Arquivos até 50 MB ou links (YouTube, Drive, OneDrive).</div>
+        {% endfor %}
+      </section>
+
+      {% if survey %}
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Pesquisa de satisfação</h2><p>{% if survey_open %}{{ survey.total }} de {{ survey.invited }} responderam{% if survey.rate is not None %} ({{ survey.rate }}%){% endif %}.{% if activity.survey_required %} Certificado liberado após responder.{% endif %}{% else %}O convite é enviado ao finalizar a atividade.{% endif %}</p></div>
+          {% if survey.total %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'survey_csv' activity.id %}"><i class="bi bi-filetype-csv"></i>CSV</a>{% endif %}
+        </div>
+        {% if survey.total %}
+          <div class="panel-body">
+            <div class="stat-row mb-3">
+              <div class="stat"><span class="stat-value">{{ survey.average }}</span><span class="stat-label">nota média</span></div>
+              <div class="stat"><span class="stat-value">{{ survey.nps }}</span><span class="stat-label" title="% de notas 9 e 10 menos % de notas 0 a 6">NPS</span></div>
+            </div>
+            <div class="nps-bars" aria-hidden="true">{% for b in survey.bars %}<div class="bar {% if b.score <= 6 %}low{% elif b.score <= 8 %}mid{% else %}high{% endif %}" style="height: {{ b.height }}%" title="Nota {{ b.score }}: {{ b.count }}"></div>{% endfor %}</div>
+            <div class="nps-axis" aria-hidden="true">{% for b in survey.bars %}<span>{{ b.score }}</span>{% endfor %}</div>
+            <p class="visually-hidden">{% for b in survey.bars %}Nota {{ b.score }}: {{ b.count }}. {% endfor %}</p>
+            <p class="small text-secondary mt-2 mb-0">{{ survey.promoters }} promotor{{ survey.promoters|pluralize:"es" }} (9 e 10) · {{ survey.passives }} neutro{{ survey.passives|pluralize }} (7 e 8) · {{ survey.detractors }} detrator{{ survey.detractors|pluralize:"es" }} (0 a 6)</p>
+          </div>
+          {% for r in survey.comments|slice:":8" %}
+            <div class="list-row"><div><span class="pill {% if r.score <= 6 %}pill-danger{% elif r.score <= 8 %}pill-wait{% else %}pill-open{% endif %} me-2">{{ r.score }}</span><span class="small">{{ r.comment }}</span></div></div>
+          {% endfor %}
+        {% endif %}
+        {% if survey_open and survey.pending %}
+          <div class="list-row">
+            <span class="small text-secondary">{{ survey.pending }} pessoa{{ survey.pending|pluralize }} ainda não {% if survey.pending == 1 %}respondeu{% else %}responderam{% endif %}.</span>
+            <form method="post" action="{% url 'survey_remind' activity.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary"><i class="bi bi-envelope"></i>Lembrar quem não respondeu</button></form>
+          </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Comunicados</h2><p>E-mail para os inscritos, que também aparece na página da atividade.</p></div>
+          <a class="btn btn-sm btn-primary" href="{% url 'announcement_create' activity.id %}"><i class="bi bi-megaphone"></i>Novo</a>
+        </div>
+        {% for a in announcements %}
+          <div class="list-row">
+            <div>
+              <strong>{{ a.subject }}</strong>
+              <div class="small text-secondary">{{ a.created_at|date:'d/m/Y H:i' }} · {{ a.get_audience_display }} · {{ a.recipients_count }} e-mail{{ a.recipients_count|pluralize }}{% if a.delivery.pending %} <span class="text-primary">({{ a.delivery.pending }} na fila)</span>{% endif %}{% if a.delivery.failed %} <span class="text-danger">({{ a.delivery.failed }} falha{{ a.delivery.failed|pluralize }})</span>{% endif %} · {{ a.sent_by.get_full_name|default:a.sent_by.username }}</div>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty small">Nenhum comunicado. Exemplos: troca de sala, material para levar, link da transmissão.</div>
+        {% endfor %}
+      </section>
+
+      <section class="panel mb-4">
+        <div class="panel-head">
+          <div><h2>Palestrantes</h2><p>Aparecem na página da atividade e na programação.</p></div>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'speaker_create' activity.id %}"><i class="bi bi-plus-lg"></i>Palestrante</a>
+        </div>
+        {% for p in speakers %}
+          <div class="list-row">
+            <div class="d-flex gap-3 align-items-center">
+              {% if p.photo %}<img src="{{ p.photo.url }}" alt="" class="speaker-photo" style="width:40px;height:40px;flex-basis:40px">{% else %}<span class="avatar">{{ p.name|slice:":1" }}</span>{% endif %}
+              <div><strong>{{ p.name }}</strong>{% if p.role %}<div class="small text-secondary">{{ p.role }}</div>{% endif %}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'speaker_edit' p.id %}">Editar</a>
+              <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'speaker_delete' p.id %}" aria-label="Remover {{ p.name }}"><i class="bi bi-trash"></i></a>
+            </div>
+          </div>
+        {% empty %}
+          <div class="empty small">Nenhum palestrante cadastrado.</div>
+        {% endfor %}
+      </section>
+
       <section class="panel mb-4">
         <div class="panel-head">
           <div><h2>Formulário de inscrição</h2><p>Perguntas além de nome, e-mail e matrícula.</p></div>

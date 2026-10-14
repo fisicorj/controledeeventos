@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <title>Check-in | {{ portal.portal_name }}</title>
+  {% include 'attendance/_app_head.html' %}
+</head>
+<body class="checkin-app">
+  <header class="checkin-bar">
+    <strong><i class="bi bi-qr-code-scan me-2" aria-hidden="true"></i>Check-in</strong>
+    {% if is_organizer %}<a href="{% url 'organizer_dashboard' %}" class="checkin-link">Painel</a>{% else %}<a href="{% url 'my_registrations' %}" class="checkin-link">Voltar</a>{% endif %}
+  </header>
+  <main class="checkin-main">
+    <p class="checkin-hint">Escolha a sessão. Dica: no menu do navegador, use <strong>"Adicionar à tela inicial"</strong> para abrir como aplicativo.</p>
+    <div class="checkin-list">
+      {% for s in sessions %}
+        <a class="checkin-card" href="{% url 'checkin_app' s.id %}">
+          <div>
+            <div class="checkin-card-title">{{ s.title }}</div>
+            <div class="checkin-card-sub">{{ s.activity.title }}</div>
+            <div class="checkin-card-sub">{{ s.start_at|date:'d/m H:i' }} até {{ s.end_at|date:'H:i' }}{% if s.location %} · {{ s.location }}{% endif %}</div>
+          </div>
+          {% if s.check_in_open %}<span class="pill pill-open">Aberto</span>{% else %}<span class="pill pill-muted">Fechado</span>{% endif %}
+        </a>
+      {% empty %}
+        <div class="checkin-empty">Nenhuma sessão hoje ou nos próximos dias.</div>
+      {% endfor %}
+    </div>
+  </main>
+</body>
+</html>

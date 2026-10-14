@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Comunicado da organização de "{{ activity.title }}":
+
+{{ announcement.body }}
+
+---
+{% include 'emails/_activity_info.txt' %}
+Você recebeu esta mensagem porque está inscrito{% if announcement.audience != 'CONFIRMED' %} ou na lista de espera{% endif %} desta atividade. Para falar com a organização, responda este e-mail.
+
+{{ institution }}
+{% endautoescape %}

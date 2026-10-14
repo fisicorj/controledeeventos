@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Página não encontrada | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:640px">
+  <div class="panel panel-body my-5 text-center">
+    <i class="bi bi-signpost-split fs-1 text-secondary" aria-hidden="true"></i>
+    <h1 class="h3 mt-2">Página não encontrada</h1>
+    <p class="text-secondary">O endereço pode estar errado, ou a página foi removida ou ainda não foi publicada.</p>
+    <div class="d-flex gap-2 justify-content-center flex-wrap">
+      <a class="btn btn-primary" href="{% url 'activity_list' %}">Ver atividades</a>
+      <a class="btn btn-outline-secondary" href="{% url 'certificate_verify' %}">Validar certificado</a>
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -34,6 +34,7 @@
           <div class="col-md-6">{% include 'core/_field.html' with field=form.registration_start %}</div>
           <div class="col-md-6">{% include 'core/_field.html' with field=form.registration_end %}</div>
         </div>
+        {% if form.notify_change %}<div class="mt-3">{% include 'core/_field.html' with field=form.notify_change %}</div>{% endif %}
       </div>
     </section>
 
@@ -45,6 +46,9 @@
           <div class="col-md-8">{% include 'core/_field.html' with field=form.status %}</div>
         </div>
         {% include 'core/_field.html' with field=form.waitlist_enabled %}
+        <div style="max-width:320px">{% include 'core/_field.html' with field=form.waitlist_offer_hours %}</div>
+        {% include 'core/_field.html' with field=form.access_code %}
+        <p class="small text-secondary mb-0">Para dividir as vagas (ex.: alunos e público externo, ou por turma), salve a atividade e crie os tipos de vaga na página de gestão.</p>
       </div>
     </section>
 
@@ -56,6 +60,14 @@
           <div class="col-md-6">{% include 'core/_field.html' with field=form.workload_hours %}</div>
           <div class="col-md-6">{% include 'core/_field.html' with field=form.min_attendance_percent %}</div>
         </div>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Pesquisa de satisfação</h2></div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=form.survey_enabled %}
+        {% include 'core/_field.html' with field=form.survey_required %}
       </div>
     </section>
 

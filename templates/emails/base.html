@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f5f8">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f5f8">
+  <tr><td align="center" style="padding:24px 12px">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1c2533;font-size:15px;line-height:1.55">
+      <tr><td style="background:{{ portal.safe_primary_color }};color:{{ portal.primary_contrast }};padding:18px 24px">
+        {% if logo_url %}<img src="{{ logo_url }}" alt="" height="36" style="height:36px;vertical-align:middle;margin-right:10px;border:0">{% endif %}
+        <strong style="font-size:17px;vertical-align:middle">{{ portal.portal_name }}</strong>
+      </td></tr>
+      <tr><td style="padding:24px">
+        {{ content }}
+      </td></tr>
+      <tr><td style="padding:14px 24px;background:#f8f9fb;color:#6b7686;font-size:12px">
+        {{ portal.institution_name }} · <a href="{{ site_url }}" style="color:#6b7686">{{ site_url }}</a><br>
+        Mensagem automática do portal de cursos e eventos.
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

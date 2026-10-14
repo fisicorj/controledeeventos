@@ -5,6 +5,7 @@ venv/
 __pycache__/
 *.pyc
 media/
+private_media/
 staticfiles/
 .idea/
 .vscode/
@@ -14,3 +15,5 @@ staticfiles/
 !.env.example
 *.sqlite3
 *.log
+backups/
+*.dump

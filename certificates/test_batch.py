@@ -13,7 +13,8 @@ from openpyxl import Workbook
 
 from accounts.models import User
 from activities.test_utils import make_activity, make_user
-from core.models import EmailSettings, SiteSettings
+from core import outbox
+from core.models import EmailSettings, OutgoingEmail, SiteSettings
 from registrations.models import Registration
 
 from .batch_import import SpreadsheetError, column_kind, parse_participants, read_table, smart_title
@@ -412,8 +413,9 @@ class BatchEmailTests(TestCase):
         self.enable()
         detail = self.client.get(reverse('batch_detail', args=[self.batch.pk]))
         self.assertContains(detail, 'Enviar para 2 pendentes')
-        response = self.client.post(self.url, follow=True)
-        self.assertContains(response, '2 certificados enviados por e-mail.')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(self.url, follow=True)
+        self.assertContains(response, '2 certificados na fila de envio.')
         self.assertEqual(sorted(m.to[0] for m in mail.outbox), ['ana@exemplo.com', 'caio@exemplo.com'])
         message = next(m for m in mail.outbox if m.to == ['ana@exemplo.com'])
         self.assertIn('Palestra', message.subject)
@@ -426,8 +428,23 @@ class BatchEmailTests(TestCase):
         mail.outbox.clear()
         response = self.client.post(self.url, follow=True)
         self.assertContains(response, 'Não havia certificados pendentes')
-        self.client.post(self.url, {'resend': '1'})
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(self.url, {'resend': '1'})
         self.assertEqual(len(mail.outbox), 2)
+
+    def test_clique_duplo_nao_duplica_e_revogado_nao_sai(self):
+        self.enable()
+        self.client.post(self.url)  # fila ainda não processada (sem gravar a transação)
+        response = self.client.post(self.url, follow=True)
+        self.assertContains(response, 'já estavam na fila')
+        self.assertEqual(OutgoingEmail.objects.count(), 2)
+        caio = self.batch.certificates.get(participant_document='3')
+        Certificate.objects.filter(pk=caio.pk).update(revoked_at=timezone.now(), revoked_by=self.org)
+        outbox.process()
+        self.assertEqual([m.to[0] for m in mail.outbox], ['ana@exemplo.com'])
+        failed = OutgoingEmail.objects.get(certificate_pk=caio.pk)
+        self.assertEqual(failed.status, OutgoingEmail.Status.FAILED)
+        self.assertIn('revogado', failed.last_error)
 
 
 class CertificateConstraintTests(TestCase):

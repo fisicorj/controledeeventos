@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Verificação em duas etapas | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'profile' %}">Meus dados</a></div>
+    <h1>Verificação em duas etapas</h1>
+    {% if required %}
+      <p>Contas de administração e organização precisam desta proteção. Leva 2 minutos e é feito uma vez só.</p>
+    {% else %}
+      <p>Além da senha, o acesso passa a pedir um código do celular.</p>
+    {% endif %}
+  </div>
+  <section class="panel panel-body">
+    <ol class="mb-4">
+      <li class="mb-2">Instale um aplicativo autenticador no celular (Google Authenticator, Microsoft Authenticator, 2FAS ou outro).</li>
+      <li class="mb-2">No aplicativo, escolha adicionar conta e leia o QR Code abaixo.</li>
+      <li>Digite o código de 6 dígitos que aparecer.</li>
+    </ol>
+    <div class="d-flex flex-wrap gap-4 align-items-center mb-4">
+      <div class="mfa-qr" style="width:220px;max-width:100%;background:#fff;padding:4px;border-radius:8px">{{ qr_svg|safe }}</div>
+      <div class="small">
+        <p class="mb-1">Não consegue ler o QR Code? Digite esta chave no aplicativo:</p>
+        <code class="fs-6 user-select-all">{{ secret }}</code>
+        <p class="text-secondary mt-2 mb-0">Tipo: baseada em tempo, 6 dígitos, 30 segundos.</p>
+      </div>
+    </div>
+    <form method="post" novalidate style="max-width:320px">
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <button class="btn btn-primary w-100 py-2 mt-3">Ativar</button>
+    </form>
+  </section>
+  {% if required %}
+    <form method="post" action="{% url 'logout' %}" data-logout class="mt-3">
+      {% csrf_token %}
+      <button class="btn btn-link px-0">Sair</button>
+    </form>
+  {% endif %}
+</main>
+<style>.mfa-qr svg{width:100%;height:auto;display:block}</style>
+{% endblock %}

@@ -25,16 +25,19 @@ TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
 # Em produção (DEBUG=False) a chave é obrigatória: sem ela, sessões e tokens CSRF ficam previsíveis.
 SECRET_KEY = os.getenv('SECRET_KEY', '').strip()
 _PLACEHOLDER_KEYS = {'', 'replace-with-a-long-random-secret', 'development-only-key'}
-if SECRET_KEY in _PLACEHOLDER_KEYS:
-    if DEBUG:
-        SECRET_KEY = 'development-only-key'
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost')
+_LOCAL_HOSTS = {'127.0.0.1', 'localhost', '[::1]', '::1'}
+if SECRET_KEY in _PLACEHOLDER_KEYS or len(SECRET_KEY) < 50:  # o mesmo mínimo que o check --deploy do Django
+    # A chave de exemplo só é aceita em desenvolvimento na própria máquina. Em qualquer servidor
+    # acessível pela rede ela deixaria sessões, links de senha e a senha do SMTP expostos.
+    if TESTING or (DEBUG and set(ALLOWED_HOSTS) <= _LOCAL_HOSTS and SECRET_KEY in _PLACEHOLDER_KEYS):
+        SECRET_KEY = 'development-only-key'  # noqa: S105 só em testes e desenvolvimento local
     else:
         raise ImproperlyConfigured(
-            'Defina SECRET_KEY no .env (obrigatória com DEBUG=False). Gere uma com: '
+            'Defina uma SECRET_KEY própria no .env (pelo menos 50 caracteres). Gere uma com: '
             'python -c "from django.core.management.utils import get_random_secret_key as g; print(g())"'
         )
 
-ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost')
 # Necessário quando o site é acessado por HTTPS ou por outro endereço (ex.: https://eventos.exemplo.br)
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
@@ -53,13 +56,17 @@ INSTALLED_APPS = [
     'core',
 ]
 MIDDLEWARE = [
+    'core.middleware.HealthCheckMiddleware',  # /saude/: antes da checagem de host e do redirecionamento HTTPS
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
+    'core.middleware.RequestCacheMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'accounts.middleware.MfaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 ROOT_URLCONF = 'config.urls'
@@ -89,8 +96,20 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '5432'),
         'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
         'CONN_HEALTH_CHECKS': True,
+        # Banco em outro servidor: DB_SSLMODE=require (ou verify-full) criptografa a conexão.
+        'OPTIONS': {'sslmode': os.getenv('DB_SSLMODE')} if os.getenv('DB_SSLMODE') else {},
     }
 }
+# Dois papéis no banco (SEC-03): DB_USER é o da aplicação, sem permissão de mudar a estrutura nem de alterar ou
+# apagar a auditoria; DB_MIGRATE_USER é o dono das tabelas, usado só pelos comandos que mudam a estrutura.
+# Sem DB_MIGRATE_USER, um único usuário faz tudo (desenvolvimento). Ver README, "Banco: dois papéis".
+DB_MIGRATE_USER = os.getenv('DB_MIGRATE_USER', '').strip()
+SCHEMA_COMMANDS = {'migrate', 'setup_db_roles', 'validate_constraints'}
+if DB_MIGRATE_USER and len(sys.argv) > 1 and sys.argv[1] in SCHEMA_COMMANDS:
+    DATABASES['default']['USER'] = DB_MIGRATE_USER
+    DATABASES['default']['PASSWORD'] = os.getenv('DB_MIGRATE_PASSWORD', '')
+# Endereço do painel administrativo do Django. Trocar o padrão "admin/" reduz tentativas automáticas.
+ADMIN_URL = (os.getenv('ADMIN_URL') or 'admin/').strip('/') + '/'
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -122,12 +141,23 @@ STORAGES = {
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 SERVE_MEDIA = env_bool('SERVE_MEDIA', False)
+# Arquivos privados (materiais pós-evento): nunca são servidos direto, só pela view que confere quem pode baixar.
+PRIVATE_MEDIA_ROOT = Path(os.getenv('PRIVATE_MEDIA_ROOT', BASE_DIR / 'private_media'))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
+# Verificação em duas etapas (accounts/mfa.py) para administradores e organizadores.
+# MFA_REQUIRED=True obriga o cadastro no primeiro acesso; com False, só quem ativou em "Meus dados" usa.
+# Padrão: obrigatória em produção, opcional com DEBUG=True (desenvolvimento) e nos testes.
+MFA_REQUIRED = env_bool('MFA_REQUIRED', not DEBUG and not TESTING)
+# Duração máxima da sessão de administradores e organizadores, em horas (participantes: 2 semanas).
+PRIVILEGED_SESSION_HOURS = int(os.getenv('PRIVILEGED_SESSION_HOURS') or '8')
+# Ações críticas (revogar certificado, cancelar emissão, configuração de e-mail) pedem senha de novo depois de
+# tantos minutos do login ou da última confirmação (accounts/reauth.py).
+REAUTH_MINUTES = int(os.getenv('REAUTH_MINUTES') or '15')
 LOGOUT_REDIRECT_URL = 'home'
 
 # ---------- Endereço público
@@ -142,9 +172,28 @@ SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8000').rstrip('/')
 EMAIL_BACKEND = 'core.mail.PlatformEmailBackend'
 DEFAULT_FROM_EMAIL = 'nao-responda@localhost'  # usado só se nenhum remetente for configurado na plataforma
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24  # link válido por 24 horas
+# Os e-mails saem em texto e também numa versão HTML com a cor e o nome da instituição (core/mail_html.py).
+EMAIL_HTML = env_bool('EMAIL_HTML', True)
+# Fila de e-mails (core/outbox.py): "thread" envia em segundo plano no próprio servidor, logo depois de cada
+# operação; "off" deixa só para o comando "process_outbox" (serviço separado). Nos testes, envia na hora.
+OUTBOX_MODE = os.getenv('OUTBOX_MODE', 'sync' if TESTING else 'thread').strip().lower()
+# Dias que destinatário e conteúdo de um e-mail enviado ficam guardados (0 = para sempre). Depois disso a
+# limpeza (serviço worker ou comando "purge_outbox") mantém só a contagem dos envios.
+OUTBOX_RETENTION_DAYS = int(os.getenv('OUTBOX_RETENTION_DAYS') or '30')
+# "Tentar de novo" em Configurações > E-mail só reenvia as falhas destes últimos dias (avisos antigos confundiriam).
+OUTBOX_RETRY_DAYS = int(os.getenv('OUTBOX_RETRY_DAYS') or '3')
+# Pasta para onde o worker exporta a auditoria uma vez por dia (core/audit_export.py). Em branco: não exporta.
+AUDIT_EXPORT_DIR = os.getenv('AUDIT_EXPORT_DIR', '').strip()
+# Quem recebe, a cada exportação, o último hash da cadeia (âncora fora do servidor). Em branco: o e-mail de alertas
+# de erro de Configurações > E-mail.
+AUDIT_EXPORT_EMAIL = os.getenv('AUDIT_EXPORT_EMAIL', '').strip()
 
 # Bootstrap usa 'danger' em vez de 'error'
 MESSAGE_TAGS = {message_constants.ERROR: 'danger'}
+
+# ---------- Content-Security-Policy (core/middleware.py)
+# enforce: bloqueia scripts e recursos fora da política (padrão); report: só registra no log; off: desliga.
+CSP_MODE = (os.getenv('CSP_MODE') or 'enforce').strip().lower()
 
 # ---------- Proxy reverso e HTTPS
 # NUM_PROXIES: quantos proxies confiáveis existem na frente da aplicação (0 = acesso direto).
@@ -172,7 +221,14 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {'simple': {'format': '{asctime} {levelname} {name}: {message}', 'style': '{'}},
-    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'}},
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
+        # Erro 500: avisa por e-mail quem estiver em Configurações > E-mail > "E-mail para alertas de erro".
+        'error_alert': {'class': 'core.alerts.ErrorAlertHandler', 'level': 'ERROR'},
+    },
     'root': {'handlers': ['console'], 'level': os.getenv('LOG_LEVEL', 'INFO')},
-    'loggers': {'django': {'handlers': ['console'], 'level': os.getenv('LOG_LEVEL', 'INFO'), 'propagate': False}},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': os.getenv('LOG_LEVEL', 'INFO'), 'propagate': False},
+        'django.request': {'handlers': ['console', 'error_alert'], 'level': 'WARNING', 'propagate': False},
+    },
 }

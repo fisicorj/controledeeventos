@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Minhas horas | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:960px">
+  <div class="page-head d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <div class="crumbs"><a href="{% url 'my_registrations' %}">Minhas inscrições</a></div>
+      <h1>Minhas horas</h1>
+      <p class="mb-0">Certificados válidos em seu nome, por semestre: os das atividades em que você se inscreveu e os de emissões avulsas com o seu e-mail confirmado{% if user.student_id_confirmed %} ou a sua matrícula{% endif %}.</p>
+    </div>
+    {% if count %}
+      <div class="d-flex gap-2 flex-wrap">
+        <div class="btn-group">
+          <a class="btn btn-primary" href="?formato=pdf"><i class="bi bi-file-earmark-text"></i>Declaração de horas (PDF)</a>
+          {% if semesters|length > 1 %}
+            <button class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Escolher semestre</span></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="?formato=pdf">Todos os semestres</a></li>
+              {% for label, items, hours in semesters %}<li><a class="dropdown-item" href="?formato=pdf&amp;semestre={{ label|urlencode }}">Só {{ label }} ({{ hours }} h)</a></li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+        <a class="btn btn-outline-secondary" href="?formato=csv"><i class="bi bi-filetype-csv"></i>Planilha (CSV)</a>
+      </div>
+    {% endif %}
+  </div>
+  {% if count %}
+    <div class="panel panel-body mb-4 d-flex gap-4 flex-wrap">
+      <div><div class="small text-secondary">Total certificado</div><div class="fs-3 fw-semibold tabular">{{ total }} h</div></div>
+      <div><div class="small text-secondary">Certificados</div><div class="fs-3 fw-semibold tabular">{{ count }}</div></div>
+    </div>
+    {% for label, items, hours in semesters %}
+      <section class="panel mb-4">
+        <div class="panel-head"><h2>{{ label }}</h2><span class="tabular fw-semibold">{{ hours }} h</span></div>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead><tr><th>Atividade</th><th>Data</th><th class="text-end">Horas</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+            <tbody>
+              {% for c in items %}
+                <tr>
+                  <td><span class="fw-semibold">{{ c.activity_title }}</span><div class="small text-secondary">{{ c.activity_type }} · código <a class="tabular" href="{% url 'certificate_verify_code' c.code %}">{{ c.code }}</a>{% if c.claimed_by_id == user.id %} · vinculado por você{% endif %}</div></td>
+                  <td class="tabular text-nowrap">{{ c.certificate_date|date:'d/m/Y' }}</td>
+                  <td class="tabular text-end">{% if c.workload_hours %}{{ c.workload_hours }} h{% else %}<span class="text-secondary" title="Certificado sem carga horária">-</span>{% endif %}</td>
+                  <td class="text-end text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'certificate_download' c.code %}" target="_blank"><i class="bi bi-filetype-pdf"></i>PDF</a>
+                    {% if c.claimed_by_id == user.id %}
+                      <form method="post" action="{% url 'certificate_claim_undo' c.code %}" class="d-inline">{% csrf_token %}
+                        <button class="btn btn-sm btn-outline-secondary" title="Tirar este certificado das suas horas"><i class="bi bi-x-lg"></i><span class="visually-hidden">Desvincular</span></button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endfor %}
+    <p class="small text-secondary">Certificados sem carga horária aparecem com "-" e não entram na soma. O semestre é o da data que aparece no certificado.</p>
+  {% else %}
+    <div class="panel empty-state"><i class="bi bi-award"></i>Você ainda não tem certificados. Eles aparecem aqui quando a atividade for finalizada e você tiver atingido a frequência mínima.</div>
+  {% endif %}
+  <section class="panel panel-body mt-4">
+    <h2 class="h6">Falta algum certificado de emissão avulsa?</h2>
+    <p class="small text-secondary">Se ele foi enviado para outro e-mail, informe o código que aparece no certificado. O nome nele precisa ser o mesmo da sua conta.</p>
+    <form method="post" action="{% url 'certificate_claim_start' %}" class="d-flex gap-2 flex-wrap" style="max-width:420px">
+      {% csrf_token %}
+      <label class="visually-hidden" for="claim-code">Código do certificado</label>
+      <input id="claim-code" name="codigo" class="form-control tabular" placeholder="ABCD-EFGH-JKMN" maxlength="20" required autocomplete="off" style="flex:1">
+      <button class="btn btn-outline-primary"><i class="bi bi-link-45deg"></i>Conferir</button>
+    </form>
+  </section>
+</main>
+{% endblock %}

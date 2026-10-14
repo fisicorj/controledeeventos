@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Avaliação | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_registrations' %}">Minhas inscrições</a></div>
+    <h1>Como foi?</h1>
+    <p>{{ activity.title }} · {{ activity.start_date|date:'d/m/Y' }}</p>
+  </div>
+  <form method="post" class="panel panel-body" novalidate>
+    {% csrf_token %}
+    <fieldset class="mb-4">
+      <legend class="form-label fs-6 fw-semibold">{{ form.score.label }}</legend>
+      <div class="score-scale" role="radiogroup">
+        {% for option in form.score %}
+          <input type="radio" name="{{ option.data.name }}" value="{{ option.data.value }}" id="{{ option.id_for_label }}"{% if option.data.selected %} checked{% endif %} required>
+          <label for="{{ option.id_for_label }}">{{ option.choice_label }}</label>
+        {% endfor %}
+      </div>
+      <div class="score-legend"><span>Nada provável</span><span>Muito provável</span></div>
+      {% for error in form.score.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+    </fieldset>
+    {% include 'core/_field.html' with field=form.comment %}
+    <p class="small text-secondary"><i class="bi bi-incognito me-1" aria-hidden="true"></i>A organização vê as notas e comentários sem o seu nome.</p>
+    <button class="btn btn-primary px-4">Enviar avaliação</button>
+  </form>
+</main>
+{% endblock %}

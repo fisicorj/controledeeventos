@@ -1,0 +1,9 @@
+{% autoescape off %}Olá, {{ name }}.
+
+O prazo para confirmar a vaga em "{{ activity.title }}" terminou e ela passou para a próxima pessoa da lista de espera.
+
+Se ainda houver vagas ou lista de espera aberta, você pode se inscrever de novo na página da atividade:
+{{ activity_url }}
+
+{{ institution }}
+{% endautoescape %}

@@ -1,0 +1,47 @@
+{% load static %}<!doctype html>
+<html lang="pt-br">
+<head>
+  <title>Check-in · {{ session.title }}</title>
+  {% include 'attendance/_app_head.html' %}
+</head>
+<body class="checkin-app">
+  <header class="checkin-bar">
+    <a href="{% url 'checkin_home' %}" class="checkin-link" aria-label="Voltar para as sessões"><i class="bi bi-chevron-left"></i></a>
+    <div class="checkin-bar-title">
+      <strong>{{ session.title }}</strong>
+      <span>{{ session.activity.title }}</span>
+    </div>
+    <span id="net" class="net net-on" role="status"><i class="bi bi-wifi"></i><span>Online</span></span>
+  </header>
+
+  <main class="checkin-main">
+    <div class="checkin-counter">
+      <div><span id="present" class="checkin-big">0</span><span class="checkin-of"> / <span id="total">0</span></span></div>
+      <div class="checkin-label">presentes</div>
+      <div id="pending" class="checkin-pending" hidden><i class="bi bi-cloud-arrow-up"></i><span></span></div>
+    </div>
+
+    {% if blocked %}
+      <div class="checkin-msg is-error">{{ blocked }}</div>
+    {% elif not session.check_in_open %}
+      <div class="checkin-msg is-error">O check-in desta sessão está fechado. Abra na edição da sessão.</div>
+    {% else %}
+      <div id="reader" class="checkin-reader"></div>
+      <button id="camera" type="button" class="btn btn-light w-100 py-3 mt-2 fw-semibold"><i class="bi bi-camera"></i>Abrir câmera</button>
+      <div id="result" class="checkin-msg" role="status" aria-live="assertive">Aponte a câmera para o QR Code.</div>
+    {% endif %}
+
+    <details class="checkin-problems" id="problems" hidden>
+      <summary>Leituras recusadas pelo servidor (<span></span>)</summary>
+      <ul></ul>
+    </details>
+    <p class="checkin-hint mt-3">Sem internet, as leituras ficam guardadas neste aparelho e são enviadas sozinhas quando a conexão voltar. Não feche a página antes de ver "Tudo sincronizado".</p>
+  </main>
+
+  {% if session.check_in_open and not blocked %}
+  <div id="checkin-config" hidden data-session="{{ session.id }}" data-roster-url="{% url 'checkin_roster' session.id %}" data-status-url="{% url 'checkin_status' session.id %}" data-scan-url="{% url 'qr_checkin' session.id %}"></div>
+  <script src="{% static 'vendor/html5-qrcode/html5-qrcode.min.js' %}" defer></script>
+  <script src="{% static 'js/checkin-app.js' %}" defer></script>
+  {% endif %}
+</body>
+</html>

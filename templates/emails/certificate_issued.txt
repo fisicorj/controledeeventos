@@ -1,9 +1,16 @@
 {% autoescape off %}Olá, {{ name }}.
 
-O seu certificado de "{{ certificate.activity_title }}" foi emitido (frequência de {{ certificate.attendance_percent }}%).
+O seu certificado de "{{ certificate.activity_title }}" foi emitido{% if certificate.attendance_percent is not None %} (frequência de {{ certificate.attendance_percent }}%){% endif %}.
+{% if survey_required %}
+Para liberar o download, responda antes a pesquisa de satisfação (menos de um minuto):
+{{ survey_url }}
 
+Depois, baixe o PDF em "Minhas inscrições": {{ my_registrations_url }}
+{% else %}
 Baixe o PDF em "Minhas inscrições": {{ my_registrations_url }}
-
+{% if survey_invite %}
+Conte como foi a atividade, com uma nota de 0 a 10 (menos de um minuto): {{ survey_url }}
+{% endif %}{% endif %}
 Código de validação: {{ certificate.code }}
 Qualquer pessoa pode conferir a autenticidade em: {{ verify_url }}
 

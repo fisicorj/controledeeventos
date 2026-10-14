@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Boa notícia: abriu uma vaga em "{{ activity.title }}" e ela está reservada para você.
+
+Para ficar com ela, confirme até {{ deadline|date:'d/m/Y \à\s H:i' }} em Minhas inscrições:
+{{ my_registrations_url }}
+
+Se não confirmar até lá, a vaga passa para a próxima pessoa da lista de espera. Se não puder mais participar, use "Não quero mais" no mesmo link.
+
+{% include 'emails/_activity_info.txt' %}
+{{ institution }}
+{% endautoescape %}

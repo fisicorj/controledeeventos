@@ -35,15 +35,17 @@ class ReportTests(TestCase):
         self.assertTrue(text.startswith('﻿'))
         rows = list(csv.reader(io.StringIO(text.lstrip('﻿')), delimiter=';'))
         header = rows[0]
-        self.assertEqual(header[:6], ['Nome', 'E-mail', 'Matrícula', 'Situação', 'Inscrito em', 'Curso'])
-        self.assertTrue(header[6].startswith('Abertura'))
+        self.assertEqual(
+            header[:7], ['Nome', 'E-mail', 'Matrícula/CPF', 'Situação', 'Tipo de vaga', 'Inscrito em', 'Curso']
+        )
+        self.assertTrue(header[7].startswith('Abertura'))
         self.assertEqual(header[-3:], ['Presenças', 'Frequência (%)', 'Certificado'])
         ana = rows[1]
         self.assertEqual(ana[0], 'Ana Souza')
         self.assertEqual(ana[2], '2024001')
-        self.assertEqual(ana[5], 'Análise e Desenv.')
-        self.assertEqual(ana[6:8], ['P', 'F'])
-        self.assertEqual(ana[8:10], ['1', '50'])
+        self.assertEqual(ana[6], 'Análise e Desenv.')
+        self.assertEqual(ana[7:9], ['P', 'F'])
+        self.assertEqual(ana[9:11], ['1', '50'])
         self.assertEqual(rows[2][3], 'Lista de espera')
 
     def test_pdfs(self):

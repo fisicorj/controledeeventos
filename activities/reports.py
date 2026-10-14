@@ -1,10 +1,10 @@
 """Relatórios para a organização/secretaria: planilha de inscritos e listas em PDF."""
 
-import csv
 import io
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.text import slugify
@@ -16,11 +16,12 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from attendance.summary import participation
 from certificates.models import Certificate
+from core.csvsafe import excel_writer
 from core.models import SiteSettings
+from core.permissions import can_manage
 from registrations.models import Registration, RegistrationAnswer
 
 from .models import Activity, Session
-from .views import can_manage
 
 BLUE = colors.HexColor('#0b4f8a')
 LIGHT = colors.HexColor('#eef3f9')
@@ -41,7 +42,7 @@ def _filename(activity, suffix):
 def registrations_csv(request, pk):
     activity = get_object_or_404(Activity, pk=pk)
     if not can_manage(request.user, activity):
-        return HttpResponseForbidden('Acesso restrito.')
+        raise PermissionDenied('Acesso restrito.')
 
     statuses = [Registration.Status.CONFIRMED, Registration.Status.WAITLISTED, Registration.Status.CANCELLED]
     sessions, rows = participation(activity, statuses=statuses)
@@ -50,9 +51,13 @@ def registrations_csv(request, pk):
         (a.registration_id, a.question_id): a.value
         for a in RegistrationAnswer.objects.filter(registration__activity=activity)
     }
-    certificates = dict(
-        Certificate.objects.filter(registration__activity=activity).values_list('registration_id', 'code')
-    )
+    certificates = {
+        registration_id: f'{code} (revogado)' if revoked_at else code
+        for registration_id, code, revoked_at in Certificate.objects.filter(
+            registration__activity=activity
+        ).values_list('registration_id', 'code', 'revoked_at')
+    }
+    categories = dict(activity.categories.values_list('id', 'name'))
     order = {Registration.Status.CONFIRMED: 0, Registration.Status.WAITLISTED: 1, Registration.Status.CANCELLED: 2}
     rows.sort(key=lambda r: (order[r.registration.status], r.registration.waitlisted_at or r.registration.created_at))
 
@@ -60,9 +65,9 @@ def registrations_csv(request, pk):
     response['Content-Disposition'] = f'attachment; filename="{_filename(activity, "inscritos")}.csv"'
     # BOM + ponto e vírgula: o Excel em português abre com acentos e colunas corretas.
     response.write('﻿')
-    writer = csv.writer(response, delimiter=';')
+    writer = excel_writer(response)
     writer.writerow(
-        ['Nome', 'E-mail', 'Matrícula', 'Situação', 'Inscrito em']
+        ['Nome', 'E-mail', 'Matrícula/CPF', 'Situação', 'Tipo de vaga', 'Inscrito em']
         + [q.label for q in questions]
         + [f'{s.title} ({_fmt(s.start_at, "%d/%m")})' for s in sessions]
         + ['Presenças', 'Frequência (%)', 'Certificado']
@@ -76,6 +81,7 @@ def registrations_csv(request, pk):
                 user.email,
                 user.institutional_id,
                 registration.get_status_display(),
+                categories.get(registration.category_id, ''),
                 _fmt(registration.created_at),
             ]
             + [answers.get((registration.id, q.id), '') for q in questions]
@@ -147,7 +153,7 @@ def attendance_pdf(request, pk):
     """Frequência consolidada: uma linha por inscrito confirmado, uma coluna por sessão."""
     activity = get_object_or_404(Activity, pk=pk)
     if not can_manage(request.user, activity):
-        return HttpResponseForbidden('Acesso restrito.')
+        raise PermissionDenied('Acesso restrito.')
     sessions, rows = participation(activity)
 
     def build(buffer):
@@ -162,9 +168,8 @@ def attendance_pdf(request, pk):
         )
         if activity.certificate_enabled:
             subtitle += f' · frequência mínima para certificado: {activity.min_attendance_percent}%'
-        header = (
-            ['#', 'Participante', 'Matrícula'] + [_fmt(s.start_at, '%d/%m %H:%M') for s in sessions] + ['Total', '%']
-        )
+        header = ['#', 'Participante', 'Matrícula/CPF']
+        header += [_fmt(s.start_at, '%d/%m %H:%M') for s in sessions] + ['Total', '%']
         data = [header]
         for i, row in enumerate(rows, 1):
             data.append(
@@ -194,7 +199,7 @@ def signature_pdf(request, pk):
     session = get_object_or_404(Session.objects.select_related('activity'), pk=pk)
     activity = session.activity
     if not can_manage(request.user, activity):
-        return HttpResponseForbidden('Acesso restrito.')
+        raise PermissionDenied('Acesso restrito.')
     _, rows = participation(activity)
 
     def build(buffer):
@@ -206,7 +211,7 @@ def signature_pdf(request, pk):
             f'{session.title} · {_fmt(session.start_at)} até {_fmt(session.end_at, "%H:%M")}'
             f' · {session.location or activity.location or "local a definir"}'
         )
-        data = [['#', 'Participante', 'Matrícula', 'Assinatura']]
+        data = [['#', 'Participante', 'Matrícula/CPF', 'Assinatura']]
         for i, row in enumerate(rows, 1):
             data.append([i, row.user.get_full_name() or row.user.username, row.user.institutional_id, ''])
         table = _table(data, [0.8 * cm, 7.2 * cm, 3 * cm, 7 * cm])

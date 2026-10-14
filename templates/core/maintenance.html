@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Manutenção | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <h1>Configurações</h1>
+    <p>Faxina diária (sessões, códigos e contadores vencidos, conteúdo de e-mails antigos, cópias de imagens e ZIPs) e exportação da auditoria. O serviço <code>worker</code> roda uma vez por dia; sem ele, agende <code>python manage.py run_maintenance</code>.</p>
+  </div>
+  {% include 'core/_tabs.html' with active='maintenance' %}
+
+  {% if stale %}
+    <div class="alert alert-warning">
+      {% if last %}A última faxina foi em {{ last.started_at|date:'d/m/Y H:i' }}, há mais de um dia e meio.{% else %}A faxina ainda não rodou nenhuma vez.{% endif %}
+      Confira se o serviço <code>worker</code> está rodando (ou o agendamento do <code>run_maintenance</code>).
+    </div>
+  {% elif last.failed %}
+    <div class="alert alert-danger">A última faxina ({{ last.started_at|date:'d/m/Y H:i' }}) teve falha em alguma tarefa. Veja o detalhe abaixo.</div>
+  {% else %}
+    <div class="alert alert-success">Última faxina em {{ last.started_at|date:'d/m/Y H:i' }}, sem falhas.</div>
+  {% endif %}
+
+  <section class="panel mb-4">
+    <div class="panel-head">
+      <h2>Última faxina</h2>
+      <form method="post" action="{% url 'maintenance_run' %}">{% csrf_token %}
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-play"></i>Rodar agora</button>
+      </form>
+    </div>
+    {% if last %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <tbody>
+            {% for label, value in last.results.items %}
+              <tr><td>{{ label }}</td><td class="text-end tabular{% if value|stringformat:'s'|slice:':7' == 'falhou:' %} text-danger{% endif %}">{{ value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body small text-secondary">Começou em {{ last.started_at|date:'d/m/Y H:i:s' }}, terminou em {{ last.finished_at|date:'H:i:s' }} · origem: {{ last.source }}</div>
+    {% else %}
+      <div class="panel-body text-secondary">Nenhuma execução registrada ainda.</div>
+    {% endif %}
+  </section>
+
+  <section class="panel mb-4">
+    <div class="panel-head"><h2>Exportação da auditoria</h2></div>
+    {% if export_folder %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Tipo</th><th class="text-end">Arquivos</th><th class="text-end">Último registro</th><th>Arquivo mais recente</th><th class="text-end">Falta exportar</th><th>Último hash</th></tr></thead>
+          <tbody>
+            {% for s in export_status %}
+              <tr>
+                <td>{% if s.stream == 'certificados' %}Certificados{% else %}Presenças removidas{% endif %}</td>
+                <td class="text-end tabular">{{ s.files }}</td>
+                <td class="text-end tabular">{{ s.last_id|default:'-' }}</td>
+                <td class="tabular">{{ s.latest|date:'d/m/Y H:i'|default:'-' }}</td>
+                <td class="text-end tabular{% if s.pending %} fw-semibold{% endif %}">{{ s.pending }}</td>
+                <td class="small font-monospace text-break">{{ s.last_hash|default:'-'|truncatechars:20 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body small text-secondary">
+        Pasta: <code>{{ export_folder }}</code>.
+        {% if anchor_email %}O último hash de cada exportação vai por e-mail para {{ anchor_email }}.{% else %}Defina <code>AUDIT_EXPORT_EMAIL</code> (ou o e-mail de alertas de erro, na aba E-mail) para receber o último hash de cada exportação.{% endif %}
+        Copie a pasta para fora do servidor; para conferir os arquivos: <code>python manage.py export_audit --pasta &lt;pasta&gt; --conferir</code>.
+      </div>
+    {% else %}
+      <div class="panel-body text-secondary">Desligada: defina <code>AUDIT_EXPORT_DIR</code> no <code>.env</code> (ver README, "Exportação da auditoria").</div>
+    {% endif %}
+  </section>
+
+  {% if runs|length > 1 %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Execuções recentes</h2></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Início</th><th>Origem</th><th>Situação</th></tr></thead>
+          <tbody>
+            {% for run in runs %}
+              <tr>
+                <td class="tabular">{{ run.started_at|date:'d/m/Y H:i' }}</td>
+                <td>{{ run.source }}</td>
+                <td>{% if not run.finished_at %}<span class="text-secondary">não terminou</span>{% elif run.failed %}<span class="text-danger">com falha</span>{% else %}ok{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

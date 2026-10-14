@@ -97,10 +97,12 @@ class BatchAuditTests(TestCase):
         config = EmailSettings.load()
         config.enabled = True
         config.save()
-        self.client.post(reverse('batch_email', args=[self.batch.pk]))
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse('batch_email', args=[self.batch.pk]))
         self.assertEqual(len(mail.outbox), 1)
         event = self.events(Action.EMAILED).get()
         self.assertEqual((event.code, event.details['recipient']), (self.alex.code, 'alex@exemplo.com'))
+        self.assertIsNotNone(event.actor)  # quem pediu o envio fica registrado, mesmo com o envio pela fila
 
     def test_registro_nao_pode_ser_alterado_nem_apagado(self):
         event = CertificateEvent.objects.first()

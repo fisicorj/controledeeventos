@@ -7,10 +7,10 @@ from django.urls import reverse
 from accounts.models import User
 from activities.models import Activity
 from activities.test_utils import make_activity, make_session, make_user
+from core.http import client_ip
 from registrations.models import Registration
 
 from .models import Attendance
-from .views import client_ip
 
 
 class QrCheckinTests(TestCase):
@@ -70,8 +70,8 @@ class SessionPageTests(TestCase):
         Registration.objects.create(user=make_user('p'), activity=activity)
         self.client.force_login(org)
         response = self.client.get(reverse('session_attendance', args=[session.id]))
-        self.assertContains(response, 'Edite a sessão</a>')
-        self.assertContains(response, "getElementById('filter')")  # busca funciona com check-in fechado
+        self.assertContains(response, 'Abrir check-in')
+        self.assertContains(response, 'data-filter-rows=')  # busca funciona com check-in fechado (static/js/app.js)
         self.assertNotContains(response, 'html5-qrcode')
         session.check_in_open = True
         session.save()

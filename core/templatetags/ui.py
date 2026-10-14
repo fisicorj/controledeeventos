@@ -9,6 +9,8 @@ def field_kind(field):
     widget = field.field.widget
     if isinstance(widget, forms.CheckboxInput):
         return 'checkbox'
+    if isinstance(widget, forms.RadioSelect):  # inclui CheckboxSelectMultiple
+        return 'choices'
     if isinstance(widget, (forms.Select, forms.SelectMultiple)):
         return 'select'
     if isinstance(widget, forms.ClearableFileInput):

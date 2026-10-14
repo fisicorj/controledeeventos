@@ -10,7 +10,7 @@ Action = CertificateEvent.Action
 def _ip(request):
     if request is None:
         return None
-    from attendance.views import client_ip
+    from core.http import client_ip
 
     ip = client_ip(request)
     return ip or None
@@ -40,12 +40,13 @@ def _event(action, certificate, actor, ip, details, when):
     )
 
 
-def record(action, certificates, *, actor=None, request=None, details=None):
+def record(action, certificates, *, actor=None, request=None, details=None, ip=None):
     """Grava um evento para cada certificado. `details` pode ser um dicionário (igual para todos)
-    ou uma função que recebe o certificado e devolve o dicionário."""
+    ou uma função que recebe o certificado e devolve o dicionário. Fora de uma requisição (envio pela fila),
+    quem fez e o IP vêm em `actor` e `ip`."""
     if request is not None and actor is None:
         actor = request.user
-    ip, when = _ip(request), timezone.now()
+    ip, when = _ip(request) if request is not None else ip, timezone.now()
     events = [_event(action, c, actor, ip, details(c) if callable(details) else details, when) for c in certificates]
     return CertificateEvent.objects.bulk_create(events)
 

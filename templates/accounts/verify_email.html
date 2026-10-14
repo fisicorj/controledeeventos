@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar e-mail | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:560px">
+  <div class="panel panel-body my-5">
+    <i class="bi bi-envelope-check fs-1 text-primary" aria-hidden="true"></i>
+    <h1 class="h3 mt-2">Confirme o seu e-mail</h1>
+    {% if has_code %}
+      <p>Enviamos um código de 6 dígitos para <strong>{{ target }}</strong>. Ele vale por 15 minutos. Confira também a caixa de spam.</p>
+    {% else %}
+      <p>Para se inscrever nas atividades, confirme <strong>{{ target }}</strong>. Peça o código abaixo.</p>
+    {% endif %}
+    {% if has_code %}
+      <form method="post" novalidate class="mb-3">
+        {% csrf_token %}
+        {% include 'core/_form.html' with form=form %}
+        <button class="btn btn-primary w-100 py-2 mt-3">Confirmar</button>
+      </form>
+    {% endif %}
+    <form method="post" class="d-flex gap-2 flex-wrap align-items-center">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resend">
+      <button class="btn {% if has_code %}btn-link px-0{% else %}btn-primary{% endif %}">{% if has_code %}Não recebeu? Enviar outro código{% else %}Enviar código{% endif %}</button>
+    </form>
+    <p class="small text-secondary mt-3 mb-0">E-mail errado? <a href="{% url 'profile' %}">Corrija em "Meus dados"</a>.</p>
+  </div>
+</main>
+{% endblock %}

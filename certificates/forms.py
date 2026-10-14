@@ -1,6 +1,8 @@
 from django import forms
 from django.utils import timezone
 
+from core.text import single_line
+
 from .models import CertificateBatch
 
 
@@ -22,6 +24,9 @@ class BatchForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['workload_hours'].widget.attrs.update(min=1, max=2000)
+
+    def clean_title(self):
+        return single_line(self.cleaned_data.get('title'))
 
     def clean_workload_hours(self):
         hours = self.cleaned_data.get('workload_hours')
@@ -57,6 +62,17 @@ class SpreadsheetForm(forms.Form):
     )
 
 
+class FullSpreadsheetForm(SpreadsheetForm):
+    """Planilha completa: os dados do evento vêm nas colunas, junto com os participantes."""
+
+    spreadsheet = forms.FileField(
+        label='Planilha completa',
+        help_text='Arquivo .xlsx ou .csv com as colunas do evento (Evento, Início...) e dos participantes (Nome...). '
+        'Um evento por planilha.',
+        widget=forms.ClearableFileInput(attrs={'accept': '.xlsx,.csv'}),
+    )
+
+
 class ReasonForm(forms.Form):
     reason = forms.CharField(
         label='Motivo',
@@ -70,3 +86,24 @@ class ReasonForm(forms.Form):
         help_text='Fica registrado na auditoria e aparece para quem validar o código. '
         'Ex.: "Nome digitado errado, reemitido com o código ABCD-EFGH-JKMN".',
     )
+
+
+class CorrectionForm(forms.Form):
+    """Correção do nome ou da matrícula num certificado já emitido (o código continua o mesmo)."""
+
+    participant_name = forms.CharField(label='Nome no certificado', max_length=300)
+    participant_document = forms.CharField(label='Matrícula ou CPF', max_length=50, required=False)
+    reason = forms.CharField(
+        label='Motivo da correção',
+        min_length=5,
+        max_length=500,
+        error_messages={'min_length': 'Explique o motivo com pelo menos 5 caracteres.'},
+        widget=forms.Textarea(attrs={'rows': 2}),
+        help_text='Fica registrado na auditoria, com o antes e o depois.',
+    )
+
+    def clean_participant_name(self):
+        return ' '.join(self.cleaned_data['participant_name'].split())
+
+    def clean_participant_document(self):
+        return ''.join(self.cleaned_data['participant_document'].split())

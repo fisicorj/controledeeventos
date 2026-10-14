@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Verificação em duas etapas | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'profile' %}">Meus dados</a></div>
+    <h1>Verificação em duas etapas</h1>
+    <p><span class="pill pill-open">ativa</span> desde {{ device.confirmed_at|date:'d/m/Y H:i' }}. Códigos de recuperação restantes: <strong>{{ device.recovery_codes|length }}</strong>.</p>
+  </div>
+  <section class="panel panel-body">
+    <p class="small text-secondary">Para as ações abaixo, digite o código atual do aplicativo.</p>
+    <form method="post" novalidate style="max-width:320px" id="mfa-actions">
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        <button class="btn btn-outline-primary" formaction="{% url 'mfa_new_codes' %}"><i class="bi bi-arrow-repeat"></i>Gerar novos códigos de recuperação</button>
+        <button class="btn btn-outline-danger" formaction="{% url 'mfa_disable' %}">{% if required %}Trocar de celular (cadastrar de novo){% else %}Desativar{% endif %}</button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

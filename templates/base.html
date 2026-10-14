@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ portal.portal_name }}{% endblock %}</title>
   <meta name="theme-color" content="{{ portal.safe_primary_color }}">
+  {% block meta %}{% endblock %}
   {% if portal.logo %}<link rel="icon" href="{{ portal.logo.url }}">{% endif %}
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
   <link rel="stylesheet" href="{% static 'vendor/public-sans/public-sans.css' %}">
   <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -35,10 +35,13 @@
             <li class="nav-item"><a class="nav-link{% if url_name == 'activity_list' or url_name == 'activity_detail' %} active{% endif %}" href="{% url 'activity_list' %}">Atividades</a></li>
             {% if user.is_authenticated %}
               <li class="nav-item"><a class="nav-link{% if url_name == 'my_registrations' %} active{% endif %}" href="{% url 'my_registrations' %}">Minhas inscrições</a></li>
-              {% if user.is_superuser or user.role == 'ADMIN' or user.role == 'ORGANIZER' %}
+              {% if user_is_organizer %}
                 <li class="nav-item"><a class="nav-link{% if url_name == 'organizer_dashboard' or 'organizer' in request.path or '/avulsos/' in request.path %} active{% endif %}" href="{% url 'organizer_dashboard' %}">Painel do organizador</a></li>
               {% endif %}
-              {% if user.is_superuser or user.role == 'ADMIN' %}
+              {% if user.role == 'PARTICIPANT' and not user.is_superuser and user.checkin_activities.exists %}
+                <li class="nav-item"><a class="nav-link{% if '/attendance/' in request.path %} active{% endif %}" href="{% url 'checkin_home' %}">Check-in</a></li>
+              {% endif %}
+              {% if user_is_admin %}
                 <li class="nav-item"><a class="nav-link{% if '/configuracoes/' in request.path or '/auditoria/' in request.path %} active{% endif %}" href="{% url 'site_settings' %}">Configurações</a></li>
               {% endif %}
             {% endif %}
@@ -52,10 +55,12 @@
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end">
                   <li><a class="dropdown-item" href="{% url 'my_registrations' %}"><i class="bi bi-ticket-perforated"></i>Minhas inscrições</a></li>
-                  <li><a class="dropdown-item" href="{% url 'password_reset' %}"><i class="bi bi-key"></i>Trocar senha</a></li>
+                  <li><a class="dropdown-item" href="{% url 'my_hours' %}"><i class="bi bi-hourglass-split"></i>Minhas horas</a></li>
+                  <li><a class="dropdown-item" href="{% url 'profile' %}"><i class="bi bi-person"></i>Meus dados</a></li>
+                  <li><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key"></i>Trocar senha</a></li>
                   <li><hr class="dropdown-divider"></li>
                   <li>
-                    <form method="post" action="{% url 'logout' %}">
+                    <form method="post" action="{% url 'logout' %}" data-logout>
                       {% csrf_token %}
                       <button class="dropdown-item"><i class="bi bi-box-arrow-right"></i>Sair</button>
                     </form>
@@ -73,6 +78,14 @@
   </header>
   {% endwith %}
 
+  {% if user.is_authenticated and not user.email_verified and request.resolver_match.url_name != 'verify_email' %}
+    <div class="container mt-3">
+      <div class="alert alert-warning flash mb-0" role="status">
+        <i class="bi bi-envelope-exclamation" aria-hidden="true"></i>
+        <div>Confirme o seu e-mail para se inscrever nas atividades. <a href="{% url 'verify_email' %}">Digitar o código</a></div>
+      </div>
+    </div>
+  {% endif %}
   {% if messages %}
     <div class="container mt-3">
       {% for message in messages %}
@@ -97,12 +110,13 @@
       <div class="d-flex gap-3">
         <a href="{% url 'activity_list' %}">Atividades</a>
         <a href="{% url 'certificate_verify' %}">Validar certificado</a>
+        <a href="{% url 'privacy' %}">Privacidade</a>
       </div>
     </div>
   </footer>
   {% endblock %}
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+  <script src="{% static 'js/app.js' %}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

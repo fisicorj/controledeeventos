@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Novo comunicado | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:760px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>Novo comunicado</h1>
+    <p>Enviado por e-mail agora. As respostas chegam no seu e-mail ({{ user.email|default:"cadastre um e-mail no seu usuário" }}).</p>
+  </div>
+  <form method="post" class="panel panel-body" novalidate>
+    {% csrf_token %}
+    {% include 'core/_form.html' with form=form %}
+    <div class="form-text mt-2">
+      Hoje: {{ counts.CONFIRMED }} confirmado{{ counts.CONFIRMED|pluralize }}, {{ counts.WAITLISTED }} na lista de espera.
+      O e-mail já inclui o nome da atividade, data, local e o link da página.
+    </div>
+    <div class="d-flex gap-2 mt-4">
+      <button class="btn btn-primary px-4"><i class="bi bi-send"></i>Enviar comunicado</button>
+      <a class="btn btn-outline-secondary" href="{% url 'activity_manage' activity.id %}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

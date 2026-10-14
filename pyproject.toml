@@ -10,7 +10,20 @@ extend-exclude = ["*/migrations/*", "staticfiles", "media"]
 quote-style = "single"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+# S: regras de segurança (equivalentes ao bandit). Nos testes, senhas fixas de exemplo são esperadas.
+select = ["E", "F", "W", "I", "B", "UP", "DJ", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test*.py" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["accounts", "activities", "attendance", "config", "registrations"]
+known-first-party = ["accounts", "activities", "attendance", "certificates", "config", "core", "registrations"]
+
+# Cobertura dos testes: coverage run manage.py test && coverage report
+[tool.coverage.run]
+source = ["."]
+omit = ["*/migrations/*", "*/test*.py", "manage.py", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+skip_empty = true
+sort = "Cover"

@@ -1,16 +1,17 @@
 """Tela de auditoria das emissões de certificados (só administradores)."""
 
-import csv
 from datetime import datetime, time
 
 from django import forms
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from core.csvsafe import excel_writer
+from core.pagination import paginate
 from core.permissions import is_platform_admin
 
 from .models import CertificateBatch, CertificateEvent
@@ -60,11 +61,9 @@ def filtered_events(params):
 @login_required
 def audit_list(request):
     if not is_platform_admin(request.user):
-        return HttpResponseForbidden(FORBIDDEN)
+        raise PermissionDenied(FORBIDDEN)
     form, qs = filtered_events(request.GET)
-    page = Paginator(qs, 50).get_page(request.GET.get('pagina'))
-    params = request.GET.copy()
-    params.pop('pagina', None)
+    page, querystring = paginate(request, qs, 50)
     batch = None
     if form.is_valid() and form.cleaned_data['lote']:
         batch = CertificateBatch.objects.filter(pk=form.cleaned_data['lote']).first()
@@ -75,7 +74,7 @@ def audit_list(request):
             'form': form,
             'page': page,
             'total': page.paginator.count,
-            'querystring': params.urlencode(),
+            'querystring': querystring,
             'batch': batch,
             'active': 'audit',
         },
@@ -85,13 +84,13 @@ def audit_list(request):
 @login_required
 def audit_csv(request):
     if not is_platform_admin(request.user):
-        return HttpResponseForbidden(FORBIDDEN)
+        raise PermissionDenied(FORBIDDEN)
     _, qs = filtered_events(request.GET)
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     stamp = timezone.localtime().strftime('%Y%m%d-%H%M')
     response['Content-Disposition'] = f'attachment; filename="auditoria-certificados-{stamp}.csv"'
     response.write('﻿')
-    writer = csv.writer(response, delimiter=';')
+    writer = excel_writer(response)
     writer.writerow(['Data e hora', 'Ação', 'Código', 'Participante', 'Matrícula', 'Atividade/evento', 'Origem',
                      'Usuário', 'IP', 'Detalhes'])  # fmt: skip
     for e in qs.iterator(chunk_size=2000):

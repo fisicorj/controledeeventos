@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Vincular certificado | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:720px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_hours' %}">Minhas horas</a></div>
+    <h1>Vincular certificado</h1>
+    <p class="mb-0">Confira se este certificado é seu. Depois de vinculado, ele entra nas suas horas e na declaração.</p>
+  </div>
+  <section class="panel panel-body mb-4">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Participante</dt><dd class="col-sm-8 fw-semibold">{{ certificate.participant_name }}</dd>
+      <dt class="col-sm-4">Atividade</dt><dd class="col-sm-8">{{ certificate.activity_title }} <span class="text-secondary">({{ certificate.activity_type }})</span></dd>
+      <dt class="col-sm-4">Data do certificado</dt><dd class="col-sm-8 tabular">{{ certificate.certificate_date|date:'d/m/Y' }}</dd>
+      <dt class="col-sm-4">Carga horária</dt><dd class="col-sm-8 tabular">{% if certificate.workload_hours %}{{ certificate.workload_hours }} h{% else %}não informada{% endif %}</dd>
+      <dt class="col-sm-4">Código</dt><dd class="col-sm-8 tabular mb-0">{{ certificate.code }}</dd>
+    </dl>
+  </section>
+  <form method="post" class="d-flex gap-2 flex-wrap">
+    {% csrf_token %}
+    <button class="btn btn-primary"><i class="bi bi-link-45deg"></i>Sim, é meu: vincular</button>
+    <a class="btn btn-outline-secondary" href="{% url 'my_hours' %}">Cancelar</a>
+  </form>
+  <p class="small text-secondary mt-3">O vínculo fica registrado na auditoria do certificado, com a sua conta. Você pode desfazê-lo em "Minhas horas".</p>
+</main>
+{% endblock %}

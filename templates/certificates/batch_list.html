@@ -12,10 +12,15 @@
       <a class="btn btn-primary" href="{% url 'batch_new' %}"><i class="bi bi-plus-lg"></i>Nova emissão</a>
     </div>
   </div>
+  <form method="get" class="d-flex gap-2 mb-3" role="search" style="max-width:520px">
+    <input class="form-control" type="search" name="q" value="{{ query }}" placeholder="Buscar pelo nome do evento" aria-label="Buscar emissões">
+    <button class="btn btn-outline-primary">Buscar</button>
+    {% if query %}<a class="btn btn-outline-secondary" href="{% url 'batch_list' %}">Limpar</a>{% endif %}
+  </form>
   <div class="panel">
     <div class="table-responsive">
       <table class="table align-middle">
-        <thead><tr><th>Evento</th><th>Período</th><th>Certificados</th>{% if user.is_superuser or user.role == 'ADMIN' %}<th>Emitido por</th>{% endif %}<th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+        <thead><tr><th>Evento</th><th>Período</th><th>Certificados</th>{% if user_is_admin %}<th>Emitido por</th>{% endif %}<th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
         <tbody>
           {% for b in batches %}
             <tr>
@@ -25,15 +30,16 @@
               </td>
               <td class="tabular text-nowrap">{{ b.start_date|date:'d/m/Y' }}{% if b.end_date != b.start_date %} a {{ b.end_date|date:'d/m/Y' }}{% endif %}</td>
               <td class="tabular">{{ b.total }}{% if b.revoked %} <span class="small text-secondary">+ {{ b.revoked }} revogado{{ b.revoked|pluralize }}</span>{% endif %}</td>
-              {% if user.is_superuser or user.role == 'ADMIN' %}<td class="small">{{ b.created_by.get_full_name|default:b.created_by.username }}</td>{% endif %}
+              {% if user_is_admin %}<td class="small">{{ b.created_by.get_full_name|default:b.created_by.username }}</td>{% endif %}
               <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'batch_detail' b.pk %}">Abrir</a></td>
             </tr>
           {% empty %}
-            <tr><td colspan="5"><div class="empty-state"><i class="bi bi-award"></i>Nenhuma emissão avulsa ainda. <a href="{% url 'batch_new' %}">Fazer a primeira</a></div></td></tr>
+            <tr><td colspan="5"><div class="empty-state"><i class="bi bi-award"></i>{% if query %}Nenhuma emissão encontrada. <a href="{% url 'batch_list' %}">Ver todas</a>{% else %}Nenhuma emissão avulsa ainda. <a href="{% url 'batch_new' %}">Fazer a primeira</a>{% endif %}</div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  {% include 'core/_pager.html' with label='emissões' %}
 </main>
 {% endblock %}

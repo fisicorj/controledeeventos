@@ -15,7 +15,7 @@
       {% include 'core/_field.html' with field=form.reason %}
       <div class="d-flex gap-2 mt-3">
         <button class="btn btn-danger">{{ button }}</button>
-        <a class="btn btn-outline-secondary" href="{% url 'batch_detail' batch.pk %}">Voltar</a>
+        <a class="btn btn-outline-secondary" href="{{ back_url }}">Voltar</a>
       </div>
     </form>
   </div>
