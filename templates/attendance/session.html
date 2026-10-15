@@ -59,7 +59,7 @@
                     {% if r.id in present %}
                       <span class="pill pill-open"><i class="bi bi-check2" aria-hidden="true"></i>Presente</span>
                       {% if session.activity.status == 'PUBLISHED' or session.activity.status == 'FINISHED' %}
-                        <form method="post" action="{% url 'remove_checkin' session.id r.id %}" class="d-inline" data-confirm="Remover a presença de {{ r.user.get_full_name|default:r.user.username }} nesta sessão?">
+                        <form method="post" action="{% url 'remove_checkin' session.id r.id %}" class="d-inline" data-confirm="Remover a presença de {{ r.user.get_full_name|default:r.user.username }} nesta sessão? A remoção fica registrada." data-confirm-label="Remover presença" data-confirm-danger>
                           {% csrf_token %}
                           <button class="btn btn-sm btn-link text-danger p-0 ms-2" aria-label="Desfazer a presença de {{ r.user.get_full_name|default:r.user.username }}">Desfazer</button>
                         </form>

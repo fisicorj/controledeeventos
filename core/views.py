@@ -31,6 +31,7 @@ def privacy(request):
 
 
 @login_required
+@require_recent_auth
 def settings_edit(request):
     if not is_platform_admin(request.user):
         raise PermissionDenied('Acesso restrito a administradores.')
@@ -244,6 +245,9 @@ def csp_report(request):
 # ---------- Manutenção: faxina diária e exportação da auditoria
 
 STALE_AFTER = timezone.timedelta(hours=36)  # faxina diária sem rodar há mais que isso: o worker/agendamento parou
+# Faxina começada há mais que isso e sem fim: o processo caiu no meio (DES-06 da 4ª auditoria). Conta como
+# interrompida e libera o botão "Rodar agora"; a faxina inteira leva poucos minutos.
+INTERRUPTED_AFTER = timezone.timedelta(hours=1)
 
 
 @login_required
@@ -257,6 +261,12 @@ def maintenance_status(request):
         raise PermissionDenied('Acesso restrito a administradores.')
     runs = list(MaintenanceRun.objects.all()[:10])
     last = next((run for run in runs if run.finished_at), None)
+    recent = timezone.now() - INTERRUPTED_AFTER
+    for run in runs:
+        run.interrupted = run.finished_at is None and not run.queued and run.started_at < recent
+    pending = MaintenanceRun.objects.filter(finished_at__isnull=True, queued=True).exists() or any(
+        run.finished_at is None and not run.interrupted for run in runs
+    )
     folder = settings.AUDIT_EXPORT_DIR
     return render(
         request,
@@ -264,6 +274,7 @@ def maintenance_status(request):
         {
             'runs': runs,
             'last': last,
+            'pending': pending,
             'stale': last is None or last.started_at < timezone.now() - STALE_AFTER,
             'export_folder': folder,
             'export_status': audit_export.status(folder) if folder else [],
@@ -280,10 +291,6 @@ def maintenance_run(request):
 
     if not is_platform_admin(request.user):
         raise PermissionDenied('Acesso restrito a administradores.')
-    results = maintenance.run(source=f'manual ({request.user.username})')
-    failed = [label for label, value in results.items() if str(value).startswith(maintenance.FAILED_PREFIX)]
-    if failed:
-        messages.error(request, 'Faxina concluída com falha em: ' + ', '.join(failed) + '.')
-    else:
-        messages.success(request, 'Faxina concluída.')
+    maintenance.request_run(request.user)
+    messages.success(request, 'Faxina pedida. Ela roda em segundo plano; esta página se atualiza sozinha.')
     return redirect('maintenance_status')

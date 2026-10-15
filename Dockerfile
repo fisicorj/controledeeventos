@@ -1,6 +1,5 @@
-# Para fixar a imagem exata (recomendado em produção), troque pela versão com digest, que o comando abaixo mostra:
-#   docker pull python:3.12-slim && docker inspect --format '{{index .RepoDigests 0}}' python:3.12-slim
-# Ex.: FROM python:3.12-slim@sha256:<digest>. O Dependabot avisa quando sair versão nova.
+# Para fixar a imagem exata (recomendado em produção), rode uma vez: bash scripts/pin_base_image.sh
+# O script troca a linha abaixo por python:3.12-slim@sha256:<digest>. O Dependabot avisa quando sair versão nova.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,8 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# requirements.lock: as mesmas versões do requirements.txt, mais as dependências delas, cada uma com o hash dos
+# arquivos publicados. Um pacote trocado no caminho (ou no próprio índice) é recusado (SEC-20).
+COPY requirements.lock .
+RUN pip install --require-hashes -r requirements.lock
 
 COPY . .
 # A chave abaixo existe só para o collectstatic rodar durante o build; a real vem do .env.

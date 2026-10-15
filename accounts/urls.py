@@ -2,6 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .mfa_views import mfa_codes, mfa_disable, mfa_new_codes, mfa_setup, mfa_verify, reauth_view
+from .user_admin_views import invite_accept
 from .views import (
     PortalLoginView,
     PortalLogoutView,
@@ -17,6 +18,7 @@ from .views import (
 
 urlpatterns = [
     path('signup/', signup, name='signup'),
+    path('convite/<str:token>/', invite_accept, name='invite_accept'),
     path('login/', PortalLoginView.as_view(), name='login'),
     path('logout/', PortalLogoutView.as_view(), name='logout'),
     path('meus-dados/', profile, name='profile'),

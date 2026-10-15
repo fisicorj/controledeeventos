@@ -17,6 +17,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # Migrações e permissões do banco, uma vez a cada subida. É o único serviço que recebe a senha do dono das
+  # tabelas (DB_MIGRATE_*): o web e o worker rodam só com o papel da aplicação (SEC-25 da 3ª auditoria).
+  migrate:
+    build: .
+    profiles: ["prod"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py setup_db_roles --if-configured"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   web:
     build: .
     profiles: ["prod"]
@@ -26,14 +41,18 @@ services:
       DB_PORT: "5432"
       # Quem envia os e-mails é o worker; o web só coloca na fila (não perde envio se o gunicorn reiniciar).
       OUTBOX_MODE: "off"
+      # A senha do dono das tabelas fica só no serviço migrate (estas linhas valem mais que o .env).
+      DB_MIGRATE_USER: ""
+      DB_MIGRATE_PASSWORD: ""
+    command: ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile -"]
     ports:
       - "8000:8000"
     volumes:
       - arena_media:/app/media
       - arena_private_media:/app/private_media
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/saude/', timeout=5).status != 200)"]
       interval: 30s
@@ -49,7 +68,29 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "5432"
-    command: ["python", "manage.py", "process_outbox", "--continuo"]
+      DB_MIGRATE_USER: ""
+      DB_MIGRATE_PASSWORD: ""
+    # Os ZIPs de lotes grandes ficam com o serviço zips: os e-mails não esperam por eles.
+    command: ["python", "manage.py", "process_outbox", "--continuo", "--sem-zips"]
+    volumes:
+      - arena_media:/app/media
+      - arena_private_media:/app/private_media
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ZIPs de lotes grandes da emissão avulsa (certificates/zips.py), separados da fila de e-mails.
+  zips:
+    build: .
+    profiles: ["prod"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_MIGRATE_USER: ""
+      DB_MIGRATE_PASSWORD: ""
+    command: ["python", "manage.py", "process_outbox", "--continuo", "--so-zips"]
     volumes:
       - arena_media:/app/media
       - arena_private_media:/app/private_media

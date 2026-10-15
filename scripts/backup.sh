@@ -52,11 +52,14 @@ fi
 mv "$DB_FILE.parcial" "$DB_FILE"  # só vira .dump se terminou sem erro
 
 echo "[$(date '+%F %T')] Backup de media/ e private_media/ -> $FILES_FILE"
+# Fora do backup: ZIPs de lotes (refeitos a pedido, ficam 24 h) e cópias de imagens do PDF (refeitas sozinhas).
+# Só aumentariam o arquivo e duplicariam dados pessoais (BD-06 da 3ª auditoria).
+EXCLUDES=(--exclude=private_media/zips --exclude=private_media/cache)
 if [ "$MODE" = docker ]; then
-  docker compose exec -T web tar -C /app -czf - media private_media > "$FILES_FILE.parcial"
+  docker compose exec -T web tar -C /app "${EXCLUDES[@]}" -czf - media private_media > "$FILES_FILE.parcial"
 else
   mkdir -p media private_media
-  tar -czf "$FILES_FILE.parcial" media private_media
+  tar "${EXCLUDES[@]}" -czf "$FILES_FILE.parcial" media private_media
 fi
 mv "$FILES_FILE.parcial" "$FILES_FILE"
 

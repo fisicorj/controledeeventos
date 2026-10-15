@@ -42,16 +42,27 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: |
-            requirements.txt
+            requirements.lock
             requirements-dev.txt
-      - name: Instalar dependências
-        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Instalar dependências (com conferência de hash, como no Dockerfile)
+        run: |
+          pip install --require-hashes -r requirements.lock
+          pip install -r requirements-dev.txt
+      - name: requirements.lock em dia com o requirements.txt
+        # Recalcula a partir do lock atual (as versões já fixadas são mantidas) e compara. Se falhar, rode o
+        # comando que está no início do requirements.lock e inclua o arquivo no commit.
+        run: |
+          cp requirements.lock /tmp/requirements.lock
+          uv pip compile requirements.txt --python-version 3.12 --python-platform x86_64-manylinux_2_28 \
+            --generate-hashes -q -o /tmp/requirements.lock \
+            --custom-compile-command "$(sed -n 2p requirements.lock | sed 's/^#    //')"
+          diff requirements.lock /tmp/requirements.lock
       - name: Padrão de código e regras de segurança (ruff)
         run: |
           ruff check .
           ruff format --check .
       - name: Dependências com vulnerabilidade conhecida (pip-audit)
-        run: pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
+        run: pip-audit -r requirements.lock -r requirements-dev.txt --progress-spinner off
       - name: Migrações em dia
         run: python manage.py makemigrations --check --dry-run
       - name: Testes (com cobertura)

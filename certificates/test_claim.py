@@ -25,7 +25,7 @@ class NamesMatchTests(TestCase):
         self.assertFalse(names_match(User(first_name='', last_name=''), ''))
 
 
-class ClaimTests(TestCase):
+class ClaimSetup(TestCase):
     def setUp(self):
         self.org = make_user('org', User.Role.ORGANIZER)
         self.ana = make_user('ana', first_name='Ana', last_name='Lima')
@@ -36,16 +36,19 @@ class ClaimTests(TestCase):
         self.cert = self.make('Ana de Souza Lima', 'ana.antigo@exemplo.com')
         self.client.force_login(self.ana)
 
-    def make(self, name, email=''):
+    def make(self, name, email='', document=''):
         moment = timezone.now()
         return Certificate.objects.create(
             batch=self.batch, participant_name=name, participant_email=email, activity_title='Semana',
             activity_type='Evento', start_date=moment, end_date=moment, workload_hours=10,
+            participant_document=document,
         )  # fmt: skip
 
     def messages(self, response):
         return [str(m) for m in get_messages(response.wsgi_request)]
 
+
+class ClaimTests(ClaimSetup):
     def test_vincula_confere_e_desfaz(self):
         hours = reverse('my_hours')
         self.assertNotContains(self.client.get(hours), self.cert.code)
@@ -110,3 +113,71 @@ class ClaimTests(TestCase):
         anonymize(self.ana)
         self.cert.refresh_from_db()
         self.assertIsNone(self.cert.claimed_by)
+
+
+class ClaimHardeningTests(ClaimSetup):
+    """SEC-24 da 3ª auditoria: homônimos, documento da planilha e certificado que já é de outra conta."""
+
+    def claim(self, certificate):
+        response = self.client.post(reverse('certificate_claim', args=[certificate.code]))
+        certificate.refresh_from_db()
+        return certificate.claimed_by, self.messages(response)
+
+    def test_cpf_da_planilha_precisa_conferir(self):
+        cert = self.make('Ana Lima', document='123.456.789-09')
+        owner, messages = self.claim(cert)
+        self.assertIsNone(owner)
+        self.assertTrue(any('CPF no certificado não confere' in m for m in messages))
+        User.objects.filter(pk=self.ana.pk).update(institutional_id='123.456.789-09')
+        self.assertEqual(self.claim(cert)[0], self.ana)
+
+    def test_matricula_precisa_estar_confirmada(self):
+        from core.models import SiteSettings
+
+        SiteSettings.objects.update_or_create(pk=1, defaults={'student_email_domains': 'aluno.fsa.br'})
+        cert = self.make('Ana Lima', document='2312345')
+        User.objects.filter(pk=self.ana.pk).update(institutional_id='2312345')  # digitada, sem confirmar
+        owner, messages = self.claim(cert)
+        self.assertIsNone(owner)
+        self.assertTrue(any('matrícula confirmada' in m for m in messages))
+        # com o e-mail institucional confirmado, a matrícula vale e o certificado já entra sozinho nas horas
+        User.objects.filter(pk=self.ana.pk).update(email='2312345@aluno.fsa.br')
+        owner, messages = self.claim(cert)
+        self.assertIsNone(owner)
+        self.assertTrue(any('já aparece nas suas horas' in m for m in messages))
+
+    def test_homonimo_nao_leva_o_certificado_de_outra_conta(self):
+        other = make_user('outra_ana', first_name='Ana', last_name='Lima', email_verified=True)
+        User.objects.filter(pk=other.pk).update(email='ana.lima@exemplo.com')
+        cert = self.make('Ana Lima', email='ana.lima@exemplo.com')
+        owner, messages = self.claim(cert)
+        self.assertIsNone(owner)
+        self.assertTrue(any('já pertence a outra conta' in m for m in messages))
+
+    def test_avisa_o_email_da_planilha_e_marca_na_declaracao(self):
+        from core.models import OutgoingEmail
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.claim(self.cert)
+        notice = OutgoingEmail.objects.get(group='claim')
+        self.assertEqual(notice.to, 'ana.antigo@exemplo.com')
+        self.assertIn('Ana Lima', notice.body)
+        response = self.client.get(reverse('my_hours') + '?formato=pdf')
+        try:
+            import io
+
+            from pypdf import PdfReader
+        except ImportError:
+            return
+        text = ' '.join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
+        self.assertIn('vinculado a esta conta pela própria pessoa', ' '.join(text.split()))
+
+
+class ExportIncludesClaimedTests(ClaimSetup):
+    def test_copia_dos_dados_inclui_os_vinculados(self):
+        # SEC-26 da 3ª auditoria: a cópia dos dados usa a mesma regra de "Minhas horas"
+        from accounts.privacy import export_data
+
+        self.assertNotIn(self.cert.code, str(export_data(self.ana)))
+        self.client.post(reverse('certificate_claim', args=[self.cert.code]))
+        self.assertIn(self.cert.code, str(export_data(self.ana)))

@@ -64,6 +64,7 @@ def certificate_revoke(request, code):
 
 
 @login_required
+@require_recent_auth
 def certificate_correct(request, code):
     certificate, back = _load(request, code)
     if certificate.is_revoked:

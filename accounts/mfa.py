@@ -146,6 +146,22 @@ def confirm(device, code):
     return new_recovery_codes(device)
 
 
+def verify_totp(user, code):
+    """Só o código do aplicativo, sem tocar nos códigos de recuperação. Para as telas que aceitam apenas o
+    aplicativo (confirmar identidade, gerar códigos novos, desativar): antes, um código de recuperação digitado
+    ali era gasto e a tela recusava mesmo assim (SEC-23 da 3ª auditoria)."""
+    with transaction.atomic():
+        device = MfaDevice.objects.select_for_update().filter(user=user, confirmed_at__isnull=False).first()
+        if device is None:
+            return False
+        step = matching_step(secret_of(device), code, device.last_step)
+        if step is None:
+            return False
+        device.last_step = step
+        device.save(update_fields=['last_step'])
+        return True
+
+
 def verify(user, code):
     """Confere um código do aplicativo ou de recuperação (este só vale uma vez). Devolve 'totp', 'recovery' ou None."""
     with transaction.atomic():

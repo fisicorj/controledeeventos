@@ -3,6 +3,47 @@
 (() => {
   'use strict';
 
+  // Confirmação com o diálogo do próprio portal (<dialog>), no lugar do confirm() do navegador: mostra o
+  // contexto, usa os botões do portal, prende o foco no diálogo e fecha com Esc (P3 da 3ª auditoria).
+  // Devolve uma Promise<boolean>. Sem suporte a <dialog> (navegador muito antigo), cai no confirm().
+  const askConfirm = (message, { confirmLabel = 'Confirmar', danger = false } = {}) => {
+    if (typeof HTMLDialogElement !== 'function') return Promise.resolve(window.confirm(message));
+    return new Promise((resolve) => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'confirm-dialog';
+      dialog.setAttribute('aria-labelledby', 'confirm-dialog-text');
+      const text = document.createElement('p');
+      text.id = 'confirm-dialog-text';
+      text.textContent = message;
+      const actions = document.createElement('div');
+      actions.className = 'confirm-dialog-actions';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'btn btn-outline-secondary';
+      cancel.textContent = 'Cancelar';
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+      ok.textContent = confirmLabel;
+      actions.append(cancel, ok);
+      dialog.append(text, actions);
+      document.body.append(dialog);
+      const close = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+      cancel.addEventListener('click', () => close(false));
+      ok.addEventListener('click', () => close(true));
+      dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(false); });  // Esc
+      dialog.showModal();
+      cancel.focus();  // o padrão é não fazer nada: Enter sem querer não confirma
+    });
+  };
+
+  // Envia de novo o formulário depois da confirmação, com o mesmo botão (mantém name/value do botão).
+  const confirmedSubmit = (form, submitter) => {
+    form.dataset.confirmed = '1';
+    if (form.requestSubmit) form.requestSubmit(submitter && submitter.form === form ? submitter : undefined);
+    else form.submit();
+  };
+
   // Botão "Copiar link" (página da atividade): no celular abre o compartilhamento do sistema.
   document.querySelectorAll('[data-copy]').forEach((button) => button.addEventListener('click', async () => {
     const url = button.dataset.copy;
@@ -42,9 +83,13 @@
     target.dispatchEvent(new Event('change'));
   }));
 
-  // Formulário que pede confirmação antes de enviar.
+  // Formulário que pede confirmação antes de enviar (data-confirm="pergunta"; data-confirm-label="Remover"
+  // muda o texto do botão; data-confirm-danger deixa o botão vermelho).
   document.querySelectorAll('form[data-confirm]').forEach((form) => form.addEventListener('submit', (event) => {
-    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    if (form.dataset.confirmed === '1') { delete form.dataset.confirmed; return; }
+    event.preventDefault();
+    const options = { confirmLabel: form.dataset.confirmLabel || 'Confirmar', danger: 'confirmDanger' in form.dataset };
+    askConfirm(form.dataset.confirm, options).then((yes) => { if (yes) confirmedSubmit(form, event.submitter); });
   }));
 
   // Filtro de linhas de uma tabela pelo texto digitado.
@@ -96,11 +141,15 @@
   }, 0);
   document.querySelectorAll('form[data-logout]').forEach((form) => form.addEventListener('submit', (event) => {
     const pending = unsent();
-    if (pending && !window.confirm(`Há ${pending} leitura(s) de presença ainda não enviada(s) neste aparelho. `
-      + 'Se sair agora, elas serão perdidas. Sair mesmo assim?')) {
+    if (pending && form.dataset.confirmed !== '1') {
       event.preventDefault();
+      const message = `Há ${pending} leitura(s) de presença ainda não enviada(s) neste aparelho. `
+        + 'Se sair agora, elas serão perdidas. Sair mesmo assim?';
+      askConfirm(message, { confirmLabel: 'Sair e perder as leituras', danger: true })
+        .then((yes) => { if (yes) confirmedSubmit(form, event.submitter); });
       return;
     }
+    delete form.dataset.confirmed;
     checkinKeys().forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ok */ } });
     if (window.caches) caches.keys().then((keys) => keys.filter((k) => k.startsWith('arena-checkin'))
       .forEach((k) => caches.delete(k))).catch(() => {});

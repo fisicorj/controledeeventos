@@ -38,6 +38,8 @@ class CertificateBatch(models.Model):
         related_name='certificate_batches',
         verbose_name='Emitido por',
     )
+    # Como em Activity.signer_name: preenchido na transferência, para a assinatura dos certificados não mudar.
+    signer_name = models.CharField('Assina os certificados', max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # Lote cancelado: todos os certificados foram revogados. Nada é apagado, por auditoria.
     cancelled_at = models.DateTimeField('Cancelado em', null=True, blank=True)
@@ -253,3 +255,24 @@ class ZipExport(models.Model):
 
     def __str__(self):
         return f'ZIP do lote {self.batch_id} ({self.get_status_display()})'
+
+
+class HoursDeclaration(models.Model):
+    """Declaração de horas emitida em "Minhas horas" (certificates/declaration.py). Guarda o que foi impresso,
+    para a página pública de conferência mostrar a lista oficial: um PDF editado não bate com ela."""
+
+    code = models.CharField('Código', max_length=14, unique=True, default=generate_code, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hours_declarations')
+    holder_name = models.CharField('Nome', max_length=300)
+    semester = models.CharField('Semestre', max_length=10, blank=True)  # em branco: todos
+    items = models.JSONField(default=list)  # [{codigo, atividade, tipo, data, horas, vinculado}]
+    total_hours = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField('Emitida em', auto_now_add=True)
+    # Cancelada pela própria pessoa em "Minhas horas": a página pública deixa de mostrar o nome e a lista.
+    cancelled_at = models.DateTimeField('Cancelada em', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.code} - {self.holder_name}'

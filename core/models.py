@@ -364,9 +364,11 @@ class MaintenanceRun(models.Model):
 
     started_at = models.DateTimeField(default=timezone.now, db_index=True)
     finished_at = models.DateTimeField(null=True, blank=True)
-    source = models.CharField(max_length=20, default='comando')
+    source = models.CharField(max_length=200, default='comando')
     results = models.JSONField(default=dict)  # {descrição: quantidade ou texto}
     failed = models.BooleanField(default=False)
+    # Pedida pelo botão "Rodar agora": espera o worker (ou a linha de execução do servidor) pegar (DES-05).
+    queued = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-started_at']

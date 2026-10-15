@@ -8,7 +8,7 @@ from core import throttle
 from core.models import SiteSettings
 
 from .documents import clean_document
-from .models import User
+from .models import User, reserved_username
 
 DOCUMENT_HELP = 'Aluno: a matrícula, igual à do e-mail institucional. Convidado: o CPF (opcional).'
 
@@ -48,6 +48,12 @@ class SignUpForm(EmailUniqueByVerifiedMixin, UserCreationForm):
             '<a href="{}" target="_blank">Leia o aviso</a>: quais dados guardamos, para quê e como pedir a exclusão.',
             reverse('privacy'),
         )
+
+    def clean_username(self):
+        username = super().clean_username()
+        if reserved_username(username):
+            raise forms.ValidationError('Este nome de usuário é reservado pelo sistema. Escolha outro.')
+        return username
 
     def clean_email(self):
         # E-mail é guardado em minúsculas e comparado sem diferenciar maiúsculas,
@@ -151,3 +157,30 @@ class CodeForm(forms.Form):
             attrs={'inputmode': 'numeric', 'autocomplete': 'one-time-code', 'class': 'form-control code-input'}
         ),
     )
+
+
+class InviteAcceptForm(UserCreationForm):
+    """Conta criada pelo convite de equipe (accounts/invites.py): o e-mail e o papel vêm do convite."""
+
+    first_name = forms.CharField(label='Nome', max_length=150)
+    last_name = forms.CharField(label='Sobrenome', max_length=150)
+    accept_privacy = forms.BooleanField(
+        label='Li e concordo com o aviso de privacidade',
+        error_messages={'required': 'Para criar a conta, é preciso concordar com o aviso de privacidade.'},
+    )
+
+    class Meta:
+        model = User
+        fields = ('username', 'first_name', 'last_name', 'password1', 'password2')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if name != 'accept_privacy':
+                field.widget.attrs['class'] = 'form-control'
+
+    def clean_username(self):
+        username = super().clean_username()
+        if reserved_username(username):
+            raise forms.ValidationError('Este nome de usuário é reservado pelo sistema. Escolha outro.')
+        return username

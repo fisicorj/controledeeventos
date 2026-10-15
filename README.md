@@ -14,7 +14,7 @@ Aplicação institucional para cursos, eventos e agendas, construída com Django
 - "Minhas inscrições" com QR Code individual (o QR contém só um token UUID, nenhum dado pessoal), posição na fila, frequência e certificado
 - E-mails: confirmação com o QR anexo, entrada na fila, vaga liberada, cancelamento, lembrete de véspera e certificado disponível
 - Certificado em PDF para quem atinge a frequência mínima, com código e QR de validação pública em `/certificados/validar/`
-- "Minhas horas": certificados válidos da pessoa e a soma das horas por semestre, com declaração de horas em PDF (todos os semestres ou um só) e planilha (CSV) para entregar à coordenação. Entram os das atividades em que ela se inscreveu e os de emissões avulsas com o e-mail confirmado da conta ou a matrícula confirmada (o PDF desses também pode ser baixado por ela). Certificado avulso enviado para outro e-mail pode ser vinculado pela própria pessoa com o código, desde que o primeiro e o último nome no certificado sejam os da conta; o vínculo fica na auditoria e pode ser desfeito
+- "Minhas horas": certificados válidos da pessoa e a soma das horas por semestre, com declaração de horas em PDF (todos os semestres ou um só; cada declaração tem código e QR para uma página pública que mostra a lista oficial e se cada certificado continua válido, então um PDF editado é descoberto; baixar de novo no mesmo dia, com a mesma lista, repete o código, e a pessoa vê as declarações que emitiu e pode cancelar uma, quando a página pública deixa de mostrar os dados) e planilha (CSV) para entregar à coordenação. Entram os das atividades em que ela se inscreveu e os de emissões avulsas com o e-mail confirmado da conta ou a matrícula confirmada (o PDF desses também pode ser baixado por ela). Certificado avulso enviado para outro e-mail pode ser vinculado pela própria pessoa com o código, desde que o primeiro e o último nome no certificado sejam os da conta, o CPF (se a planilha trouxer) seja o mesmo da conta e o certificado não pertença a outra conta. O vínculo fica na auditoria, aparece marcado na declaração, o e-mail da planilha é avisado e a pessoa pode desfazer
 - E-mails em texto e em HTML (com a cor, o nome e o logo da instituição); `EMAIL_HTML=False` deixa só o texto
 - Emissão avulsa de certificados para eventos que não foram cadastrados no sistema: importa a planilha de participantes (.xlsx ou .csv com Nome, Matrícula, Turma e, opcionalmente, E-mail) com os dados do evento digitados na tela, ou uma planilha completa que já traz também os dados do evento (Evento, Tipo, Início, Término, Carga horária, Data do certificado; um evento por planilha, com modelo para baixar), mostra uma prévia com os problemas de cada linha, emite e oferece ZIP com todos os PDFs, lista em CSV com códigos e links, e envio por e-mail com o PDF anexo
 - Auditoria de certificados (Configurações > Auditoria de certificados, só administradores): emissão, alteração (com antes e depois), revogação, envio por e-mail e download feito pela equipe, com usuário, data e IP. Certificados não são apagados: são revogados com motivo, e a validação pública mostra "Certificado revogado". O registro não pode ser alterado nem apagado, nem direto no banco (trigger no PostgreSQL). Downloads feitos pelo próprio participante e consultas na página pública de validação não são registrados
@@ -74,7 +74,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 ### 2. Variáveis de ambiente
 
-Copie `.env.example` para `.env` (`Copy-Item .env.example .env` no Windows, `cp .env.example .env` no Linux/macOS) e, para desenvolvimento, mude `DEBUG=True`. Com isso os demais valores padrão já funcionam com o banco do Docker. A chave de exemplo só é aceita com `DEBUG=True` e acesso pela própria máquina; em qualquer servidor, gere uma `SECRET_KEY` própria.
+Copie `.env.example` para `.env` (`Copy-Item .env.example .env` no Windows, `cp .env.example .env` no Linux/macOS) e, para desenvolvimento, mude `DEBUG=True` e preencha `DB_PASSWORD` com uma senha à sua escolha (o `docker-compose.yml` cria o banco com ela). Com isso os demais valores padrão já funcionam com o banco do Docker. A chave de exemplo só é aceita com `DEBUG=True` e acesso pela própria máquina; em qualquer servidor, gere uma `SECRET_KEY` própria.
 
 ### 3. Banco de dados
 
@@ -151,12 +151,15 @@ Confira item por item (os detalhes estão nas seções abaixo):
 
 - [ ] `SECRET_KEY` própria, com cópia guardada fora do servidor (a senha do SMTP e a verificação em duas etapas dependem dela)
 - [ ] `DEBUG=False`; `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` e `SITE_URL` com o endereço público
-- [ ] Senha do PostgreSQL trocada (no `docker-compose.yml` e no `.env`)
+- [ ] Senhas do PostgreSQL longas e aleatórias em `DB_PASSWORD` e `DB_MIGRATE_PASSWORD` (o `check --deploy` avisa, `arena.W004`, se alguma for fraca ou a do exemplo)
+- [ ] Imagem base fixada pelo digest: `bash scripts/pin_base_image.sh` (veja "Dependências")
+- [ ] Log de acesso do servidor (`docker compose logs web`, ou o arquivo do proxy) visto só por quem administra: os links de convite e de nova senha passam por ele
 - [ ] Banco com dois papéis: um dono das tabelas, só para migrações e backup, e outro para a aplicação (veja "Banco: dois papéis")
 - [ ] Proxy reverso com HTTPS, `NUM_PROXIES=1` e **limite de tamanho de envio** (veja "Proxy reverso")
 - [ ] HSTS ligado com valor baixo (`SECURE_HSTS_SECONDS=3600`), aumentando depois que o HTTPS estiver estável
 - [ ] `ADMIN_URL` próprio (o painel sai de `/admin/`) e, se possível, restrito por IP no proxy
 - [ ] `python manage.py check --deploy` sem avisos que você não tenha decidido aceitar
+- [ ] `python manage.py validate_constraints` rodado uma vez depois do `migrate` (veja "Regras de data do banco")
 - [ ] Serviço `worker` rodando (ou, sem Docker, os comandos agendados: `process_outbox`, `send_reminders`, `expire_waitlist_offers`, `run_maintenance`)
 - [ ] Servidor de e-mail configurado em Configurações > E-mail, com teste enviado, e e-mail para alertas de erro
 - [ ] Backup agendado, cópia para fora do servidor e um teste de restauração feito
@@ -187,12 +190,12 @@ docker compose --profile prod up -d --build
 docker compose exec web python manage.py createsuperuser
 ```
 
-O container aplica as migrations ao iniciar e roda o gunicorn na porta 8000. O serviço `worker` envia a fila de e-mails (veja "Fila de e-mails"). O HTTPS fica a cargo de um proxy reverso (nginx, Caddy, Traefik) na frente dele.
+A cada subida, o serviço `migrate` aplica as migrations e termina; depois o `web` roda o gunicorn na porta 8000. O serviço `worker` envia a fila de e-mails (veja "Fila de e-mails") e o `zips` monta os ZIPs de lotes grandes. O HTTPS fica a cargo de um proxy reverso (nginx, Caddy, Traefik) na frente dele.
 
 ### Opção 2: Sem Docker
 
 ```bash
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.lock   # Linux com Python 3.12; no Windows: pip install -r requirements.txt
 python manage.py migrate
 python manage.py collectstatic --noinput
 # Linux
@@ -239,7 +242,7 @@ A auditoria de certificados e o registro de presenças removidas são protegidos
 - `DB_MIGRATE_USER` / `DB_MIGRATE_PASSWORD`: dono das tabelas. Usado só por `migrate`, `setup_db_roles` e pelos scripts de backup.
 - `DB_USER` / `DB_PASSWORD`: papel da aplicação. Lê e grava os dados, mas não muda a estrutura do banco, não altera nem apaga a auditoria e não mexe na tabela de migrações.
 
-O comando `python manage.py setup_db_roles` (rodado com o dono) cria o papel da aplicação, ou atualiza a senha e as permissões dele, e faz as tabelas criadas por migrações futuras já nascerem com as mesmas permissões. Pode rodar quantas vezes quiser. O container `web` já roda o comando depois do `migrate` sempre que `DB_MIGRATE_USER` estiver definido.
+O comando `python manage.py setup_db_roles` (rodado com o dono) cria o papel da aplicação, ou atualiza a senha e as permissões dele, e faz as tabelas criadas por migrações futuras já nascerem com as mesmas permissões. Pode rodar quantas vezes quiser. No Docker, o serviço `migrate` do `docker-compose.yml` roda `migrate` e `setup_db_roles` a cada subida, antes do `web`. Ele é o único que recebe `DB_MIGRATE_USER` e `DB_MIGRATE_PASSWORD`: o `web` e o `worker` sobem com essas variáveis em branco, então uma falha no servidor web não expõe a senha do dono.
 
 **Instalação nova com Docker:** no `.env`, defina os dois papéis com nomes diferentes:
 
@@ -250,7 +253,7 @@ DB_USER=arena_app
 DB_PASSWORD=<outra senha forte>
 ```
 
-O PostgreSQL do `docker-compose.yml` cria o `DB_MIGRATE_USER` na primeira subida, e o `web` cria o `arena_app`.
+O PostgreSQL do `docker-compose.yml` cria o `DB_MIGRATE_USER` na primeira subida, e o serviço `migrate` cria o `arena_app`.
 
 **Banco que já existe (um usuário só até agora):** o usuário atual vira o dono, e você cria um novo para a aplicação. No `.env`, passe o usuário e a senha atuais para `DB_MIGRATE_USER` e `DB_MIGRATE_PASSWORD`, e coloque em `DB_USER` e `DB_PASSWORD` um nome e uma senha novos. Depois, `docker compose --profile prod up -d` (ou, sem Docker, `python manage.py migrate` seguido de `python manage.py setup_db_roles`).
 
@@ -267,7 +270,7 @@ python manage.py validate_constraints --conferir   # só lista o que falta
 python manage.py validate_constraints              # valida as regras sem pendências
 ```
 
-Se algum registro antigo violar uma regra, o comando mostra os ids; corrija pelo `/admin/` e rode de novo. Com `DB_MIGRATE_USER` configurado, o comando usa o dono das tabelas automaticamente (no Docker: `docker compose exec web python manage.py validate_constraints`).
+Se algum registro antigo violar uma regra, o comando mostra os ids; corrija pelo `/admin/` e rode de novo. Com `DB_MIGRATE_USER` configurado, o comando usa o dono das tabelas automaticamente (no Docker, pelo serviço que tem a senha do dono: `docker compose --profile prod run --rm migrate python manage.py validate_constraints`).
 
 ### Verificação em duas etapas
 
@@ -280,7 +283,7 @@ Em produção (`DEBUG=False`), administradores, organizadores e quem acessa o `/
 - `reset_mfa` também encerra todas as sessões abertas da conta: quem estava com o celular perdido (ou com a sessão roubada) precisa entrar de novo.
 - O código também é limitado por conta: além de 5 tentativas erradas por endereço IP, mais de 20 erros em 15 minutos bloqueiam a conta inteira por esse tempo, venham de onde vierem.
 
-**Confirmação de identidade.** Ações sensíveis pedem a senha de novo (e o código do aplicativo, se a conta usa verificação em duas etapas) quando o último login ou confirmação foi há mais de `REAUTH_MINUTES` minutos (padrão 15): revogar certificado, cancelar lote ou revogar certificados de um lote e as telas de **Configurações > E-mail** (inclusive o envio de teste). Assim uma sessão esquecida aberta não basta para essas ações.
+**Confirmação de identidade.** Ações sensíveis pedem a senha de novo (e o código do aplicativo, se a conta usa verificação em duas etapas) quando o último login ou confirmação foi há mais de `REAUTH_MINUTES` minutos (padrão 15): revogar ou corrigir certificado, editar ou cancelar lote, revogar certificados de um lote, **Configurações > Instituição e certificados** (assinatura, arte e nome da instituição), **Configurações > E-mail** (inclusive o envio de teste), as ações do painel de usuários e o "Rodar agora" da faxina. Assim uma sessão esquecida aberta não basta para essas ações.
 
 ### Segurança do navegador (CSP)
 
@@ -291,17 +294,35 @@ Toda página sai com `Content-Security-Policy`: só scripts do próprio portal (
 
 Ao sair do portal, o navegador apaga os dados do check-in guardados no aparelho (lista de inscritos e telas offline). Se ainda houver leituras sem enviar, o portal pergunta antes.
 
+### Usuários e permissões
+
+O que cada pessoa pode fazer depende só do **papel** da conta: Participante (se inscreve e acompanha as próprias horas), Organizador (cria e gerencia as próprias atividades e emissões avulsas) e Administrador (gerencia tudo, inclusive as Configurações). Os grupos e permissões do Django não são usados.
+
+As contas são administradas em **Configurações > Usuários**: busca e filtros (papel, situação, e-mail confirmado, duas etapas), e na página de cada pessoa as ações de mudar o papel, desativar ou reativar (desativar encerra as sessões abertas), redefinir as duas etapas, enviar o link de nova senha (o administrador nunca digita a senha de ninguém), reenviar o código de confirmação e excluir a conta (anonimiza, como a exclusão pelo próprio participante). Regras:
+
+- toda ação pede a senha de novo se o login tiver mais de `REAUTH_MINUTES` minutos e fica no histórico da conta (quem fez, quando, o que mudou);
+- ninguém altera a própria conta pelo painel, e o portal nunca fica sem um administrador ativo;
+- só superusuário altera conta de superusuário.
+
+**Equipe nova:** em **Configurações > Usuários > Convidar para a equipe**, informe o e-mail e o papel (organizador ou administrador). A pessoa recebe um link (vale 7 dias, uma vez só), cria o usuário e a senha, e a conta já nasce com o papel e o e-mail confirmado; no primeiro acesso, cadastra o aplicativo autenticador. Convites abertos podem ser cancelados na mesma tela.
+
+**Quem sai da equipe:** na página da pessoa, "Transferir atividades e emissões" passa tudo o que ela organizou para outra conta de organizador ou administrador. Quando a instituição não tem signatário próprio, os certificados saem com o nome de quem organizou; esse nome fica guardado na atividade e no lote na transferência (e também na exclusão da conta), então os certificados já emitidos não mudam.
+
+**Conferência periódica:** "Exportar CSV" na lista baixa as contas do filtro atual (papel, situação, duas etapas, último acesso). Como tem dados pessoais de todos, pede a senha de novo.
+
+O `/admin/` do Django fica para emergências: lá a tela de usuário não mostra grupos e permissões, papel e e-mail são só leitura e não é possível apagar contas. Para criar o primeiro administrador: `python manage.py createsuperuser` (o superusuário já tem acesso a tudo, inclusive ao painel de usuários).
+
 ### Painel administrativo, banco remoto e outros avisos
 
 - `ADMIN_URL` (ex.: `ADMIN_URL=gestao-arena/`) troca o endereço do painel `/admin/`. Se possível, restrinja esse caminho por IP no proxy.
 - Banco em outro servidor: `DB_SSLMODE=require` (ou `verify-full`) criptografa a conexão.
-- `python manage.py check --deploy` mostra também os avisos do Arena+ (`arena.W001` a `W003`): `SERVE_MEDIA` ligado em produção, banco remoto sem criptografia e painel no endereço padrão.
+- `python manage.py check --deploy` mostra também os avisos do Arena+ (`arena.W001` a `W004`): `SERVE_MEDIA` ligado em produção, banco remoto sem criptografia, painel no endereço padrão e senha do banco fraca.
 - A tela **Configurações > E-mail > Enviar teste** faz o servidor conectar no host e porta informados: deixe-a só com quem administra o servidor.
 - A fila de e-mails entrega "pelo menos uma vez": se o processo for derrubado no instante entre o servidor de e-mail aceitar a mensagem e o portal anotar o envio, ela sai de novo depois de 10 minutos. É raro e inofensivo (um aviso repetido).
 
 ### Exportação da auditoria
 
-`python manage.py export_audit --pasta <pasta>` grava a auditoria de certificados e as presenças removidas em arquivos JSON Lines encadeados por hash: cada linha leva o hash da anterior, então alterar, apagar ou reordenar qualquer linha quebra a cadeia. Cada exportação continua de onde a anterior parou. `--conferir` verifica todos os arquivos da pasta.
+`python manage.py export_audit --pasta <pasta>` grava a auditoria de certificados, as presenças removidas e o histórico de alterações de contas (os três só aceitam inclusões, inclusive no banco) em arquivos JSON Lines encadeados por hash: cada linha leva o hash da anterior, então alterar, apagar ou reordenar qualquer linha quebra a cadeia. Cada exportação continua de onde a anterior parou. `--conferir` verifica todos os arquivos da pasta.
 
 Com `AUDIT_EXPORT_DIR` no `.env`, o serviço `worker` exporta uma vez por dia. Duas exportações ao mesmo tempo (o worker e um comando manual) não acontecem: a segunda é recusada com aviso. Quando sai algo novo, o portal manda por e-mail o último registro e o último hash de cada tipo, para `AUDIT_EXPORT_EMAIL` ou, sem ele, para o e-mail de alertas de erro. Guarde essas mensagens: ficam fora do servidor e mostram depois se alguém refez a cadeia inteira (o hash final mudaria). No Docker, use uma pasta dentro do volume de arquivos privados, que já entra no backup: `AUDIT_EXPORT_DIR=/app/private_media/auditoria-exportada`. Para valer como prova, copie a pasta para um armazenamento que não permita alterar nem apagar (por exemplo, um bucket com bloqueio de objetos) e fora do servidor.
 
@@ -311,11 +332,11 @@ O serviço `worker` do Docker, além da fila de e-mails, faz sozinho:
 
 - a cada 5 minutos: devolve à fila de espera as vagas não confirmadas no prazo e apaga o conteúdo dos e-mails antigos;
 - de hora em hora: lembretes de véspera;
-- uma vez por dia: apaga sessões de login vencidas, códigos de confirmação com mais de 7 dias, contadores de tentativas antigos, cadastros de participante não confirmados em 7 dias e cópias de imagens do certificado sem uso há 30 dias; e exporta a auditoria, se `AUDIT_EXPORT_DIR` estiver definido.
+- uma vez por dia: apaga sessões de login vencidas, códigos de confirmação com mais de 7 dias, contadores de tentativas antigos, cadastros de participante não confirmados em 7 dias, cópias de imagens do certificado sem uso há 30 dias e convites de equipe não aceitos, vencidos ou cancelados há mais de 30 dias; e exporta a auditoria, se `AUDIT_EXPORT_DIR` estiver definido.
 
 Sem Docker, agende `python manage.py run_maintenance` uma vez por dia (além de `process_outbox`, `send_reminders` e `expire_waitlist_offers`, já descritos).
 
-Em **Configurações > Manutenção** (só administradores) aparecem o resultado da última faxina, tarefa por tarefa, as execuções recentes e a situação da exportação da auditoria (arquivos, último registro e hash, quanto falta exportar). A tela avisa quando a faxina não roda há mais de um dia e meio (worker parado ou agendamento esquecido) e tem o botão "Rodar agora", que pede a senha de novo se o login for antigo.
+Em **Configurações > Manutenção** (só administradores) aparecem o resultado da última faxina, tarefa por tarefa, as execuções recentes e a situação da exportação da auditoria (arquivos, último registro e hash, quanto falta exportar). A tela avisa quando a faxina não roda há mais de um dia e meio (worker parado ou agendamento esquecido) e tem o botão "Rodar agora", que pede a senha de novo se o login for antigo. A faxina pedida roda em segundo plano (pelo `worker`, ou pelo próprio servidor com `OUTBOX_MODE=thread`), e a tela se atualiza sozinha até terminar.
 
 A rota `/saude/` responde `{"situacao": "ok", "banco": "ok"}` (código 200) quando a aplicação e o banco estão funcionando, e 503 quando não. Ela atende por `http://127.0.0.1:8000/saude/` mesmo fora do `ALLOWED_HOSTS` e sem HTTPS, para o `healthcheck` do Docker (o `web` aparece como `healthy` em `docker compose ps`, e o `worker` só sobe depois dele) e para um monitor externo, como o UptimeRobot.
 
@@ -349,7 +370,11 @@ Em **Configurações > E-mail**, o campo "E-mail para alertas de erro" recebe um
 
 As versões ficam fixas em `requirements.txt`: o servidor recebe exatamente o que foi testado. O Dependabot (`.github/dependabot.yml`) abre um pull request quando sai versão nova (pacotes Python, actions da CI e imagem base do Docker), e a CI roda os testes nele. Para atualizar à mão, troque a versão, rode `python manage.py test` e faça o deploy.
 
-A CI só tem permissão de leitura no repositório, e as actions ficam fixas pelo hash do commit (o comentário ao lado mostra a versão), para que uma tag alterada por terceiros não rode código diferente. Para fixar também a imagem base do Docker, veja o comentário no início do `Dockerfile`: `docker pull python:3.12-slim` e depois `docker inspect --format '{{index .RepoDigests 0}}' python:3.12-slim` mostram o digest para colocar no `FROM`.
+A CI só tem permissão de leitura no repositório, e as actions ficam fixas pelo hash do commit (o comentário ao lado mostra a versão), para que uma tag alterada por terceiros não rode código diferente.
+
+**Pacotes conferidos por hash.** O `requirements.lock` tem as mesmas versões do `requirements.txt`, mais as dependências delas, cada uma com o hash dos arquivos publicados. O Docker e a CI instalam por ele com `--require-hashes`: um pacote adulterado no caminho é recusado. O lock vale para Linux com Python 3.12 (o servidor); no Windows, para desenvolver, continue usando `pip install -r requirements.txt`. Depois de mudar o `requirements.txt` (à mão ou por um pull request do Dependabot), gere o lock de novo com o comando que está no início dele (`pip install uv` antes, se precisar) e inclua os dois arquivos no commit; a CI falha se o lock estiver desatualizado.
+
+**Imagem base fixada.** Rode uma vez `bash scripts/pin_base_image.sh` (precisa do Docker): ele troca o `FROM python:3.12-slim` do `Dockerfile` pela mesma imagem com o digest (`@sha256:...`), e o build passa a usar sempre exatamente essa imagem. Rode de novo quando o Dependabot avisar que saiu versão nova.
 
 A CI também roda o `pip-audit`, que falha quando alguma versão fixada tem vulnerabilidade conhecida publicada (base do PyPI/OSV), e as regras de segurança do `ruff`. Para conferir na sua máquina: `pip-audit -r requirements.txt -r requirements-dev.txt`.
 
@@ -365,7 +390,7 @@ Por padrão (`OUTBOX_MODE=thread`) o próprio servidor envia, logo depois de cad
 
 No Docker, o serviço `web` já sobe com `OUTBOX_MODE=off` (definido no `docker-compose.yml`, vale mais que o `.env`): ele só coloca as mensagens na fila e o `worker` envia. Assim um reinício do servidor web no meio de um lote não atrasa nada. Sem Docker, use `OUTBOX_MODE=off` quando o `process_outbox` estiver agendado de minuto em minuto. Vários processos podem trabalhar ao mesmo tempo sem duplicar mensagens.
 
-**ZIP de lotes grandes.** Na emissão avulsa, lotes com até 200 certificados baixam o ZIP na hora. Acima disso, o botão vira "Gerar ZIP de todos": o arquivo é montado em segundo plano (pelo `worker`, ou pelo próprio servidor com `OUTBOX_MODE=thread`), a página se atualiza sozinha e mostra o link quando fica pronto. O arquivo fica em `private_media/zips/` por 24 horas e é descartado se o lote mudar (participantes novos, revogação ou edição dos dados).
+**ZIP de lotes grandes.** Na emissão avulsa, lotes com até 200 certificados baixam o ZIP na hora. Acima disso, o botão vira "Gerar ZIP de todos": o arquivo é montado em segundo plano (no Docker, pelo serviço `zips`, separado do `worker` para os e-mails não esperarem; sem Docker, pelo `process_outbox` agendado, um ZIP por vez entre os envios, ou pelo próprio servidor com `OUTBOX_MODE=thread`), a página se atualiza sozinha e mostra o link quando fica pronto. O arquivo fica em `private_media/zips/` por 24 horas e é descartado se o lote mudar (participantes novos, revogação ou edição dos dados).
 
 **Retenção.** Depois de `OUTBOX_RETENTION_DAYS` dias (padrão 30), destinatário, assunto e conteúdo dos e-mails enviados, e dos que falharam de vez, são apagados; fica só a contagem, que alimenta o andamento dos envios nas telas. O serviço `worker` faz isso sozinho. Sem ele, agende uma vez por dia `python manage.py purge_outbox`. Na exclusão de conta, as mensagens da pessoa são limpas na hora.
 
@@ -391,7 +416,7 @@ bash scripts/restore.sh --teste backups/arena-db-AAAAMMDD-HHMMSS.dump backups/ar
 Para restaurar de verdade (substitui banco e arquivos), pare o site, rode sem `--teste` e confirme digitando `RESTAURAR`:
 
 ```bash
-docker compose stop web worker
+docker compose stop web worker zips
 bash scripts/restore.sh backups/arena-db-AAAAMMDD-HHMMSS.dump backups/arena-arquivos-AAAAMMDD-HHMMSS.tar.gz
 docker compose --profile prod up -d
 ```

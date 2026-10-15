@@ -6,10 +6,12 @@ ou CPF ligados à conta. Respostas do formulário de inscrição são apagadas; 
 vaga passa para a lista de espera.
 """
 
+import secrets
+
 from django.db import transaction
 from django.utils import timezone
 
-from .models import User
+from .models import DELETED_PREFIX, User
 
 
 def can_delete_self(user):
@@ -24,6 +26,7 @@ def _when(value):
 
 def export_data(user):
     """Tudo o que o portal guarda sobre a pessoa, num dicionário pronto para virar JSON."""
+    from certificates.history import ownership
     from certificates.models import Certificate
     from registrations.models import Registration, SurveyResponse
 
@@ -64,11 +67,19 @@ def export_data(user):
                 'codigo': c.code,
                 'revogado': c.is_revoked,
             }
-            for c in Certificate.objects.filter(batch__isnull=False, participant_email__iexact=user.email)
-        ]
-        if user.email
-        else [],  # fmt: skip
+            # Mesma regra de "Minhas horas": pelo e-mail, pela matrícula confirmada ou vinculados pelo código.
+            for c in Certificate.objects.filter(ownership(user), batch__isnull=False).distinct().order_by('pk')
+        ],
         'equipe_de_checkin': list(user.checkin_activities.values_list('title', flat=True)),
+        'declaracoes_de_horas': [
+            {
+                'codigo': d.code,
+                'emitida_em': _when(d.created_at),
+                'semestre': d.semester or 'todos',
+                'horas': d.total_hours,
+            }
+            for d in user.hours_declarations.all()
+        ],
     }
     for r in registrations:
         certificate = certificates.get(r.pk)
@@ -94,6 +105,18 @@ def export_data(user):
             }
         )
     return data
+
+
+def keep_signature(user):
+    """Quando a instituição não tem signatário próprio, os certificados saem com o nome de quem organizou ou
+    emitiu. Antes de esse nome sumir (exclusão) ou de a atividade mudar de dono (transferência), ele fica gravado
+    na atividade e no lote, e os certificados já emitidos continuam iguais."""
+    from activities.models import Activity
+    from certificates.models import CertificateBatch
+
+    name = user.get_full_name() or user.username
+    Activity.objects.filter(organizer=user, signer_name='').update(signer_name=name)
+    CertificateBatch.objects.filter(created_by=user, signer_name='').update(signer_name=name)
 
 
 @transaction.atomic
@@ -126,7 +149,10 @@ def anonymize(user):
     user.email_codes.all().delete()
     user.checkin_activities.clear()
     user.claimed_certificates.update(claimed_by=None, claimed_at=None)  # certificados avulsos vinculados pelo código
-    tag = f'excluido-{user.pk}'
+    # Sufixo aleatório: o nome não pode ser previsto nem reservado por outra pessoa (SEC-21 da 3ª auditoria).
+    keep_signature(user)
+    user.hours_declarations.all().delete()  # a página pública da declaração mostra o nome: sai junto
+    tag = f'{DELETED_PREFIX}-{user.pk}-{secrets.token_hex(4)}'
     user.username = tag
     user.first_name, user.last_name = 'Conta', 'excluída'
     user.email = f'{tag}@conta-excluida.invalid'
@@ -134,5 +160,6 @@ def anonymize(user):
     user.email_verified = False
     user.is_active = False
     user.set_unusable_password()
+    user.deleted_at = now
     user.save()
     return cancelled

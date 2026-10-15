@@ -266,7 +266,21 @@ class DeployCheckTests(TestCase):
         with override_settings(SERVE_MEDIA=True, DEBUG=False, ADMIN_URL='admin/'):
             ids = {w.id for w in arena_deploy_checks(None)}
         self.assertTrue({'arena.W001', 'arena.W003'} <= ids)
-        databases = {'default': {'HOST': 'db.exemplo.br', 'OPTIONS': {}}}
+        strong = 'Uma-senha-longa-e-aleatoria-0192'
+        databases = {'default': {'HOST': 'db.exemplo.br', 'OPTIONS': {}, 'PASSWORD': strong}}
         with override_settings(DATABASES=databases, ADMIN_URL='gestao/'):
             ids = {w.id for w in arena_deploy_checks(None)}
         self.assertEqual(ids, {'arena.W002'})
+        # a senha do dono das tabelas também é conferida, quando há dois papéis
+        databases = {'default': {'HOST': 'db', 'OPTIONS': {}, 'PASSWORD': strong}}
+        with (
+            override_settings(DATABASES=databases, ADMIN_URL='gestao/', DB_MIGRATE_USER='dono'),
+            mock.patch.dict('os.environ', {'DB_MIGRATE_PASSWORD': 'arena_password'}),
+        ):
+            warnings = arena_deploy_checks(None)
+        self.assertEqual([w.id for w in warnings], ['arena.W004'])
+        self.assertIn('DB_MIGRATE_PASSWORD', warnings[0].msg)
+        for weak in ('', 'arena_password', 'curta'):
+            databases = {'default': {'HOST': 'db', 'OPTIONS': {}, 'PASSWORD': weak}}
+            with override_settings(DATABASES=databases, ADMIN_URL='gestao/'):
+                self.assertEqual({w.id for w in arena_deploy_checks(None)}, {'arena.W004'}, weak)

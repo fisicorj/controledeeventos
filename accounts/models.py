@@ -22,6 +22,8 @@ class User(AbstractUser):
     email_verified = models.BooleanField('E-mail confirmado', default=True)
     # Quando a pessoa concordou com o aviso de privacidade (no cadastro). Contas antigas ficam em branco.
     privacy_accepted_at = models.DateTimeField('Aceite do aviso de privacidade', null=True, blank=True)
+    # Conta excluída (anonimizada, accounts/privacy.py). Não reativa e não aparece como conta comum.
+    deleted_at = models.DateTimeField('Excluída em', null=True, blank=True)
 
     class Meta(AbstractUser.Meta):
         swappable = 'AUTH_USER_MODEL'
@@ -37,6 +39,10 @@ class User(AbstractUser):
     def __str__(self):
         return self.get_full_name() or self.username
 
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
+
     def student_id_confirmed_in(self, site):
         """Matrícula confirmada: e-mail confirmado, do domínio dos alunos, e igual à matrícula digitada."""
         document = (self.institutional_id or '').strip().lower()
@@ -47,6 +53,15 @@ class User(AbstractUser):
         from core.models import SiteSettings
 
         return self.student_id_confirmed_in(SiteSettings.load())
+
+
+# Prefixo do nome das contas excluídas. O cadastro recusa nomes que comecem assim (SEC-21 da 3ª auditoria):
+# antes, quem se cadastrasse como "excluido-57" impedia a exclusão da conta 57.
+DELETED_PREFIX = 'excluido'
+
+
+def reserved_username(username):
+    return (username or '').strip().lower().startswith(DELETED_PREFIX)
 
 
 def email_taken(email, exclude_pk=None):
@@ -114,3 +129,81 @@ class MfaDevice(models.Model):
 
     def __str__(self):
         return f'{self.user} ({"ativa" if self.confirmed_at else "não ativada"})'
+
+
+class UserChange(models.Model):
+    """Histórico do que os administradores fizeram nas contas pelo painel de usuários (accounts/user_admin.py).
+    A conta alterada fica só pelo número (o nome aparece pela ligação com a conta, e some se ela for excluída);
+    o nome de quem fez fica copiado, para continuar legível."""
+
+    class Action(models.TextChoices):
+        ROLE = 'ROLE', 'Papel alterado'
+        DEACTIVATED = 'DEACTIVATED', 'Conta desativada'
+        REACTIVATED = 'REACTIVATED', 'Conta reativada'
+        MFA_RESET = 'MFA_RESET', 'Duas etapas redefinidas'
+        PASSWORD_LINK = 'PASSWORD_LINK', 'Link de nova senha enviado'
+        CODE_RESENT = 'CODE_RESENT', 'Código de confirmação reenviado'
+        ANONYMIZED = 'ANONYMIZED', 'Conta excluída (anonimizada)'
+        TRANSFERRED = 'TRANSFERRED', 'Atividades e emissões transferidas'
+        INVITED = 'INVITED', 'Convite de equipe enviado'
+        INVITE_ACCEPTED = 'INVITE_ACCEPTED', 'Conta criada por convite'
+
+    created_at = models.DateTimeField('Data e hora', auto_now_add=True, db_index=True)
+    # Sem chave estrangeira no banco (db_constraint=False, DO_NOTHING): o histórico é só de inclusão (BD-07) e
+    # apagar uma conta não pode tentar alterar estas linhas. O número da conta continua guardado.
+    actor = models.ForeignKey('User', on_delete=models.DO_NOTHING, db_constraint=False, null=True, related_name='+')
+    actor_name = models.CharField('Quem fez', max_length=300)
+    target = models.ForeignKey(
+        'User', on_delete=models.DO_NOTHING, db_constraint=False, null=True, related_name='changes_received'
+    )
+    target_name = models.CharField('Conta', max_length=300)  # "conta <número>": sem dado pessoal
+    action = models.CharField('Ação', max_length=20, choices=Action.choices)
+    details = models.JSONField('Detalhes', default=dict, blank=True)
+    ip = models.GenericIPAddressField('IP', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'alteração de conta'
+        verbose_name_plural = 'alterações de contas'
+
+    def __str__(self):
+        return f'{self.get_action_display()}: {self.target_name}'
+
+
+class UserSession(models.Model):
+    """Quais sessões são de qual conta (accounts/sessions.py). Encerrar as sessões de uma pessoa apaga só as dela,
+    sem abrir e decodificar todas as sessões do portal (DES-05 da 3ª auditoria)."""
+
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='tracked_sessions')
+    session_key = models.CharField(max_length=40, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user_id}: {self.session_key[:8]}...'
+
+
+class StaffInvite(models.Model):
+    """Convite para a equipe (organizador ou administrador), enviado pelo painel de usuários
+    (accounts/invites.py). O link só leva o token; no banco fica o hash dele."""
+
+    email = models.EmailField('E-mail')
+    role = models.CharField('Papel', max_length=20, choices=User.Role.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_by = models.ForeignKey('User', on_delete=models.PROTECT, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_user = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.email} ({self.get_role_display()})'
+
+    @property
+    def is_open(self):
+        from django.utils import timezone
+
+        return not self.accepted_at and not self.cancelled_at and self.expires_at > timezone.now()

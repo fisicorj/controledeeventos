@@ -1,0 +1,14 @@
+{% autoescape off %}Olá.
+
+{{ inviter }} convidou você para a equipe do portal de {{ institution }}, como {{ role }}.
+
+Para aceitar, crie a sua conta pelo link abaixo (vale por {{ days }} dias e só pode ser usado uma vez):
+
+{{ url }}
+
+No primeiro acesso, o portal pede o cadastro de um aplicativo autenticador (verificação em duas etapas).
+
+Se você não esperava este convite, ignore este e-mail.
+
+{{ institution }}
+{% endautoescape %}

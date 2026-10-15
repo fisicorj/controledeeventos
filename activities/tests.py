@@ -190,6 +190,7 @@ class ManageTests(TestCase):
             return len(ctx.captured_queries), response
 
         SiteSettings.load()  # a primeira leitura cria o registro de configurações; não entra na contagem
+        self.client.get(url)  # a primeira requisição registra a sessão (accounts/sessions.py); não entra na contagem
         Registration.objects.create(user=make_user('u0'), activity=activity)
         one, _ = count_queries()
         for i in range(1, 10):

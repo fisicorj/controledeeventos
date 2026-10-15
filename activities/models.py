@@ -54,6 +54,9 @@ class Activity(models.Model):
     organizer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='organized_activities'
     )
+    # Nome que assina os certificados quando não há signatário da instituição (Configurações). Em branco: o nome
+    # do organizador. Preenchido na transferência para outro organizador, para os certificados não mudarem.
+    signer_name = models.CharField('Assina os certificados', max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     waitlist_enabled = models.BooleanField(
         'Lista de espera', default=True, help_text='Quando lotar, novos interessados entram numa fila.'
