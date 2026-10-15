@@ -6,7 +6,7 @@
 #   Restaura num banco temporário (arena_restore_test), mostra quantas linhas têm as tabelas principais e apaga.
 #
 # Restauração de verdade (substitui o banco e os arquivos atuais; pare o site antes):
-#   docker compose stop web worker
+#   docker compose stop web worker zips
 #   bash scripts/restore.sh backups/arena-db-AAAAMMDD-HHMMSS.dump backups/arena-arquivos-AAAAMMDD-HHMMSS.tar.gz
 #   docker compose start web worker
 #

@@ -22,6 +22,7 @@ GENESIS = '0' * 64
 STREAMS = {
     'certificados': ('certificates', 'CertificateEvent'),
     'presencas': ('attendance', 'AttendanceRemoval'),
+    'contas': ('accounts', 'UserChange'),
 }
 
 

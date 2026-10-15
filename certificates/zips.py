@@ -67,12 +67,13 @@ def _claim():
         return export
 
 
-def process():
-    """Monta os ZIPs da fila. Vários processos podem rodar juntos: cada pedido é pego por um só."""
+def process(limit=None):
+    """Monta os ZIPs da fila (no máximo `limit`, se informado). Vários processos podem rodar juntos: cada pedido
+    é pego por um só."""
     from .batch import build_zip
 
     done = 0
-    while (export := _claim()) is not None:
+    while (limit is None or done < limit) and (export := _claim()) is not None:
         try:
             spool, count = build_zip(export.batch, actor=export.requested_by, with_count=True)
             with spool:

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Manutenção | {{ portal.portal_name }}{% endblock %}
+{% block meta %}{% if pending %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block content %}
 <main class="container" style="max-width:980px">
   <div class="page-head">
@@ -22,9 +23,13 @@
   <section class="panel mb-4">
     <div class="panel-head">
       <h2>Última faxina</h2>
-      <form method="post" action="{% url 'maintenance_run' %}">{% csrf_token %}
-        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-play"></i>Rodar agora</button>
-      </form>
+      {% if pending %}
+        <span class="small text-secondary"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Faxina em andamento...</span>
+      {% else %}
+        <form method="post" action="{% url 'maintenance_run' %}">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-primary"><i class="bi bi-play"></i>Rodar agora</button>
+        </form>
+      {% endif %}
     </div>
     {% if last %}
       <div class="table-responsive">
@@ -51,7 +56,7 @@
           <tbody>
             {% for s in export_status %}
               <tr>
-                <td>{% if s.stream == 'certificados' %}Certificados{% else %}Presenças removidas{% endif %}</td>
+                <td>{% if s.stream == 'certificados' %}Certificados{% elif s.stream == 'presencas' %}Presenças removidas{% else %}Alterações de contas{% endif %}</td>
                 <td class="text-end tabular">{{ s.files }}</td>
                 <td class="text-end tabular">{{ s.last_id|default:'-' }}</td>
                 <td class="tabular">{{ s.latest|date:'d/m/Y H:i'|default:'-' }}</td>
@@ -83,7 +88,7 @@
               <tr>
                 <td class="tabular">{{ run.started_at|date:'d/m/Y H:i' }}</td>
                 <td>{{ run.source }}</td>
-                <td>{% if not run.finished_at %}<span class="text-secondary">não terminou</span>{% elif run.failed %}<span class="text-danger">com falha</span>{% else %}ok{% endif %}</td>
+                <td>{% if run.queued %}<span class="text-secondary">na fila</span>{% elif run.interrupted %}<span class="text-danger">interrompida</span>{% elif not run.finished_at %}<span class="text-secondary">em andamento</span>{% elif run.failed %}<span class="text-danger">com falha</span>{% else %}ok{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>

@@ -10,10 +10,15 @@ UNVERIFIED_ACCOUNT_DAYS = 7  # cadastro que nunca confirmou o e-mail
 
 
 def clear_sessions():
-    """Sessões vencidas (o Django não apaga sozinho; equivale ao comando clearsessions)."""
+    """Sessões vencidas (o Django não apaga sozinho; equivale ao comando clearsessions), e o registro de quais
+    sessões são de quem (accounts/sessions.py) acompanha."""
     from django.contrib.sessions.models import Session
 
-    return Session.objects.filter(expire_date__lt=timezone.now()).delete()[0]
+    from accounts.sessions import forget_closed
+
+    removed = Session.objects.filter(expire_date__lt=timezone.now()).delete()[0]
+    forget_closed()
+    return removed
 
 
 def purge_email_codes():
@@ -76,6 +81,12 @@ def export_audit():
     return sum(count for _, count in results.values())
 
 
+def purge_invites():
+    from accounts.invites import purge_old
+
+    return purge_old()
+
+
 def clean_zip_exports():
     from certificates import zips
 
@@ -96,6 +107,7 @@ TASKS = [
     ('Cópias de imagens sem uso apagadas', clean_image_cache),
     ('E-mails antigos com o conteúdo apagado', redact_emails),
     ('ZIPs de certificados vencidos apagados', clean_zip_exports),
+    ('Convites de equipe antigos apagados', purge_invites),
     ('Registros de auditoria exportados', export_audit),
 ]
 
@@ -103,12 +115,13 @@ TASKS = [
 FAILED_PREFIX = 'falhou: '
 
 
-def run(log=None, source='comando'):
+def run(log=None, source='comando', record=None):
     """Roda cada tarefa; a falha de uma não impede as outras. Devolve {descrição: quantidade ou erro}.
     Cada execução fica registrada (MaintenanceRun) para a tela Configurações > Manutenção."""
     from .models import MaintenanceRun
 
-    record = MaintenanceRun.objects.create(source=source)
+    if record is None:
+        record = MaintenanceRun.objects.create(source=source)
     results = {}
     for label, task in TASKS:
         try:
@@ -124,3 +137,59 @@ def run(log=None, source='comando'):
     old = MaintenanceRun.objects.values_list('pk', flat=True)[MaintenanceRun.KEEP :]
     MaintenanceRun.objects.filter(pk__in=list(old)).delete()
     return results
+
+
+# ---------- "Rodar agora" pela tela (DES-05 da 3ª auditoria): a faxina sai da requisição
+
+
+def request_run(user):
+    """Coloca uma faxina na fila (se já não houver uma esperando) e chama quem vai rodá-la."""
+    from django.db import transaction
+
+    from .models import MaintenanceRun
+
+    waiting = MaintenanceRun.objects.filter(queued=True).first()
+    if waiting:
+        return waiting
+    record = MaintenanceRun.objects.create(source=f'manual ({user.username})'[:200], queued=True)
+    transaction.on_commit(_kick)
+    return record
+
+
+def _kick():
+    import threading
+
+    from django.conf import settings
+
+    mode = getattr(settings, 'OUTBOX_MODE', 'thread')
+    if mode == 'sync':
+        run_queued()
+    elif mode == 'thread':
+        threading.Thread(target=_thread_run, name='maintenance', daemon=True).start()
+
+
+def _thread_run():
+    from django.db import close_old_connections
+
+    try:
+        run_queued()
+    finally:
+        close_old_connections()
+
+
+def run_queued(log=None):
+    """Roda as faxinas pedidas pela tela. Chamado pelo worker a cada volta; só um processo pega cada pedido."""
+    from django.db import transaction
+
+    from .models import MaintenanceRun
+
+    done = 0
+    while True:
+        with transaction.atomic():
+            record = MaintenanceRun.objects.select_for_update(skip_locked=True).filter(queued=True).first()
+            if record is None:
+                return done
+            record.queued, record.started_at = False, timezone.now()
+            record.save(update_fields=['queued', 'started_at'])
+        run(log=log, record=record)
+        done += 1

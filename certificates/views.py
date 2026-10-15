@@ -7,8 +7,8 @@ from django.views.decorators.http import require_POST
 from core.permissions import can_manage, can_manage_batch
 
 from . import audit
-from .batch import signer_for
-from .models import Certificate
+from .batch import activity_signer, signer_for
+from .models import Certificate, HoursDeclaration
 from .pdf import certificate_pdf
 
 
@@ -41,6 +41,8 @@ def verify_code(request, code):
     if throttle.blocked(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip):
         return render(request, 'certificates/verify.html', {'raw': code, 'throttled': True}, status=429)
     certificate = Certificate.objects.filter(code=normalize_code(code) or '').first()
+    if certificate is None and HoursDeclaration.objects.filter(code=normalize_code(code) or '').exists():
+        return redirect('declaration_verify', code=normalize_code(code))  # código de declaração de horas
     if certificate is None:
         throttle.hit(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip)
     return render(
@@ -76,7 +78,7 @@ def download(request, code):
             if needs_survey(certificate.registration):
                 messages.info(request, 'Responda a pesquisa de satisfação para liberar o seu certificado.')
                 return redirect('survey', pk=certificate.registration_id)
-        signer = activity.organizer.get_full_name() or activity.organizer.username
+        signer = activity_signer(activity)
     if certificate.is_revoked:
         messages.error(request, 'Este certificado foi revogado e não pode mais ser baixado.')
         return redirect('certificate_verify_code', code=certificate.code)
@@ -110,21 +112,28 @@ def my_hours(request):
                 writer.writerow([label, c.activity_title, c.activity_type, date, c.workload_hours or '', c.code])
         return response
     if request.GET.get('formato') == 'pdf':
-        from .declaration import declaration_pdf
+        from .declaration import TooMany, declaration_pdf, record
 
         chosen = request.GET.get('semestre', '')
         selected = [s for s in semesters if s[0] == chosen] if chosen else semesters
         if not selected:
             raise Http404
         suffix = f'-{chosen.replace("/", "-")}' if chosen else ''
-        response = HttpResponse(declaration_pdf(request.user, selected), content_type='application/pdf')
+        try:
+            declaration = record(request.user, selected, chosen)
+        except TooMany:
+            messages.error(request, 'Você já emitiu muitas declarações diferentes hoje. Tente de novo amanhã.')
+            return redirect('my_hours')
+        pdf = declaration_pdf(request.user, selected, declaration)
+        response = HttpResponse(pdf, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="declaracao-horas{suffix}.pdf"'
         return response
     total = sum(hours for _, _, hours in semesters)
+    declarations = request.user.hours_declarations.all()[:20]
     return render(
         request,
         'certificates/my_hours.html',
-        {'semesters': semesters, 'total': total, 'count': len(certificates)},
+        {'semesters': semesters, 'total': total, 'count': len(certificates), 'declarations': declarations},
     )
 
 
@@ -170,3 +179,55 @@ def claim_undo(request, code):
     claim.unclaim(request.user, certificate, request=request)
     messages.success(request, f'O certificado "{certificate.activity_title}" saiu das suas horas.')
     return redirect('my_hours')
+
+
+@login_required
+@require_POST
+def declaration_cancel(request, code):
+    """A própria pessoa cancela uma declaração (ex.: entregue por engano): a página pública deixa de mostrar o
+    nome e a lista (SEC-28 da 4ª auditoria)."""
+    from django.utils import timezone
+
+    declaration = get_object_or_404(HoursDeclaration, code=code, user=request.user, cancelled_at__isnull=True)
+    declaration.cancelled_at = timezone.now()
+    declaration.save(update_fields=['cancelled_at'])
+    messages.success(
+        request, f'Declaração {declaration.code} cancelada: a página de conferência não mostra mais os dados.'
+    )
+    return redirect('my_hours')
+
+
+def declaration_verify(request, code):
+    """Página pública da declaração de horas: a lista oficial e a situação atual de cada certificado."""
+    from core import throttle
+    from core.http import client_ip
+
+    ip = client_ip(request) or '-'
+    if throttle.blocked(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip):
+        return render(request, 'certificates/verify.html', {'raw': code, 'throttled': True}, status=429)
+    declaration = HoursDeclaration.objects.filter(code=normalize_code(code) or '').first()
+    if declaration is None:
+        throttle.hit(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip)
+        return render(request, 'certificates/verify.html', {'raw': code, 'not_found': True}, status=404)
+    if declaration.cancelled_at:
+        return render(request, 'certificates/declaration_verify.html', {'declaration': declaration, 'cancelled': True})
+    current = {
+        c.code: c
+        for c in Certificate.objects.filter(code__in=[i['codigo'] for i in declaration.items]).select_related('batch')
+    }
+    rows = []
+    for item in declaration.items:
+        certificate = current.get(item['codigo'])
+        cancelled = certificate is not None and certificate.batch is not None and certificate.batch.is_cancelled
+        valid = certificate is not None and not certificate.is_revoked and not cancelled
+        rows.append({**item, 'valid': valid})
+    return render(
+        request,
+        'certificates/declaration_verify.html',
+        {
+            'declaration': declaration,
+            'rows': rows,
+            'all_valid': all(r['valid'] for r in rows),
+            'any_claimed': any(r['vinculado'] for r in rows),
+        },
+    )

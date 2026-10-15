@@ -8,7 +8,7 @@ from django.db import DatabaseError, connection, transaction
 
 # Registros de auditoria: a aplicação só lê e inclui. O trigger também recusa UPDATE e DELETE, mas quem é dono
 # da tabela pode apagar o trigger; a aplicação, sem ser dona, não pode.
-APPEND_ONLY_TABLES = ['certificates_certificateevent', 'attendance_attendanceremoval']
+APPEND_ONLY_TABLES = ['certificates_certificateevent', 'attendance_attendanceremoval', 'accounts_userchange']
 READ_ONLY_TABLES = ['django_migrations']
 
 

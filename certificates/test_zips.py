@@ -107,6 +107,26 @@ class ZipExportTests(TestCase):
         self.assertFalse(ZipExport.objects.exists())
         self.assertFalse(path.exists())
 
+    def test_servico_so_de_zips(self):
+        # DES-04 da 3ª auditoria: o worker dos e-mails pode deixar os ZIPs para um serviço próprio
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        self.client.post(reverse('batch_zip_request', args=[self.batch.pk]))  # fica na fila
+        call_command('process_outbox', sem_zips=True, stdout=StringIO())
+        self.assertEqual(ZipExport.objects.get().status, 'PENDING')
+        out = StringIO()
+        call_command('process_outbox', so_zips=True, stdout=out)
+        self.assertEqual(ZipExport.objects.get().status, 'READY')
+        self.assertIn('ZIPs de certificados gerados: 1', out.getvalue())
+
+    def test_um_zip_por_volta_no_laco_dos_emails(self):
+        for _ in range(2):
+            ZipExport.objects.create(batch=self.batch)
+        self.assertEqual(zips.process(limit=1), 1)
+        self.assertEqual(ZipExport.objects.filter(status='PENDING').count(), 1)
+
     def test_lote_pequeno_continua_direto(self):
         with mock.patch.object(zips, 'ZIP_DIRECT_LIMIT', 200):
             response = self.client.get(reverse('batch_zip', args=[self.batch.pk]))

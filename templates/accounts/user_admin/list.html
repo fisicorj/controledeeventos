@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Usuários | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <h1>Configurações</h1>
+    <p>Contas do portal: papel (o que cada pessoa pode fazer), situação e verificação em duas etapas. As alterações ficam registradas no histórico de cada conta.</p>
+  </div>
+  {% include 'core/_tabs.html' with active='users' %}
+
+  <div class="d-flex gap-4 flex-wrap mb-3">
+    {% for label, n in counts %}<div><div class="small text-secondary">{{ label }}</div><div class="fs-4 fw-semibold tabular">{{ n }}</div></div>{% endfor %}
+    <div class="small text-secondary align-self-end">contas ativas por papel</div>
+  </div>
+
+  <form method="get" class="panel panel-body mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-lg-4">
+        <label class="form-label" for="f-q">Buscar</label>
+        <input id="f-q" name="q" value="{{ query }}" class="form-control" placeholder="Nome, usuário, e-mail ou matrícula">
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="f-papel">Papel</label>
+        <select id="f-papel" name="papel" class="form-select">
+          <option value="">Todos</option>
+          {% for value, label in roles %}<option value="{{ value }}"{% if selected.papel == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="f-situacao">Situação</label>
+        <select id="f-situacao" name="situacao" class="form-select">
+          <option value="">Todas</option>
+          <option value="ativos"{% if selected.situacao == 'ativos' %} selected{% endif %}>Ativas</option>
+          <option value="inativos"{% if selected.situacao == 'inativos' %} selected{% endif %}>Desativadas</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="f-email">E-mail</label>
+        <select id="f-email" name="email" class="form-select">
+          <option value="">Todos</option>
+          <option value="confirmado"{% if selected.email == 'confirmado' %} selected{% endif %}>Confirmado</option>
+          <option value="pendente"{% if selected.email == 'pendente' %} selected{% endif %}>Não confirmado</option>
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <label class="form-label" for="f-mfa">Duas etapas</label>
+        <select id="f-mfa" name="duas_etapas" class="form-select">
+          <option value="">Todas</option>
+          <option value="sim"{% if selected.duas_etapas == 'sim' %} selected{% endif %}>Ativada</option>
+          <option value="nao"{% if selected.duas_etapas == 'nao' %} selected{% endif %}>Sem</option>
+        </select>
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <button class="btn btn-primary"><i class="bi bi-funnel"></i>Filtrar</button>
+      <a class="btn btn-outline-secondary" href="{% url 'user_admin_list' %}">Limpar</a>
+      <a class="btn btn-outline-primary ms-auto" href="{% url 'user_admin_invites' %}"><i class="bi bi-person-plus"></i>Convidar para a equipe</a>
+      <a class="btn btn-outline-secondary" href="{% url 'user_admin_csv' %}{% if querystring %}?{{ querystring }}{% endif %}"><i class="bi bi-filetype-csv"></i>Exportar CSV</a>
+    </div>
+  </form>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ total }} conta{{ total|pluralize }}</h2></div>
+    {% if page.object_list %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Situação</th><th>Último acesso</th></tr></thead>
+          <tbody>
+            {% for u in page.object_list %}
+              <tr>
+                <td><a class="fw-semibold" href="{% url 'user_admin_detail' u.pk %}">{{ u.get_full_name|default:u.username }}</a><div class="small text-secondary">{{ u.username }}{% if u.institutional_id %} · {{ u.institutional_id }}{% endif %}</div></td>
+                <td class="text-break">{{ u.email }}{% if not u.email_verified %} <span class="badge text-bg-warning">não confirmado</span>{% endif %}</td>
+                <td>{{ u.get_role_display }}{% if u.is_superuser %} <span class="badge text-bg-dark">superusuário</span>{% endif %}{% if u.has_mfa %} <i class="bi bi-shield-check text-success" title="Duas etapas ativada"></i><span class="visually-hidden">duas etapas ativada</span>{% endif %}</td>
+                <td>{% if u.deleted_at %}<span class="text-secondary">Excluída</span>{% elif u.is_active %}Ativa{% else %}<span class="text-secondary">Desativada</span>{% endif %}</td>
+                <td class="tabular text-nowrap">{{ u.last_login|date:'d/m/Y H:i'|default:'nunca' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-body text-secondary">Nenhuma conta com esses filtros.</div>
+    {% endif %}
+  </section>
+  {% include 'core/_pager.html' with label='contas' %}
+</main>
+{% endblock %}

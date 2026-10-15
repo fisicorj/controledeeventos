@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}{{ person.get_full_name|default:person.username }} | Usuários{% endblock %}
+{% block content %}
+<main class="container" style="max-width:1080px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'user_admin_list' %}">Usuários</a></div>
+    <h1>{{ person.get_full_name|default:person.username }}</h1>
+    <p class="mb-0">{{ person.get_role_display }}{% if person.is_superuser %} · superusuário{% endif %} · {% if person.is_active %}conta ativa{% else %}conta desativada{% endif %}</p>
+  </div>
+
+  {% if deleted %}<div class="alert alert-secondary">Esta conta foi excluída: os dados pessoais foram apagados. O histórico continua abaixo.</div>
+  {% elif is_self %}<div class="alert alert-info">Esta é a sua conta. Para mudar o seu papel ou desativá-la, peça a outro administrador; seus dados ficam em <a href="{% url 'profile' %}">Meus dados</a>.</div>
+  {% elif locked %}<div class="alert alert-warning">Conta de superusuário: só outro superusuário pode alterá-la.</div>{% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <section class="panel panel-body h-100">
+        <h2 class="h6">Dados</h2>
+        <dl class="row mb-0 small">
+          <dt class="col-5">Usuário</dt><dd class="col-7">{{ person.username }}</dd>
+          <dt class="col-5">E-mail</dt><dd class="col-7 text-break">{{ person.email }} {% if person.email_verified %}<span class="badge text-bg-success">confirmado</span>{% else %}<span class="badge text-bg-warning">não confirmado</span>{% endif %}</dd>
+          {% if pending_code and pending_code.email != person.email %}<dt class="col-5">Troca de e-mail</dt><dd class="col-7">aguardando confirmação</dd>{% endif %}
+          <dt class="col-5">Matrícula ou CPF</dt><dd class="col-7">{{ person.institutional_id|default:'-' }}</dd>
+          <dt class="col-5">Cadastro</dt><dd class="col-7 tabular">{{ person.date_joined|date:'d/m/Y H:i' }}</dd>
+          <dt class="col-5">Último acesso</dt><dd class="col-7 tabular">{{ person.last_login|date:'d/m/Y H:i'|default:'nunca' }}</dd>
+          <dt class="col-5">Duas etapas</dt><dd class="col-7">{% if person.has_mfa %}ativada{% else %}não ativada{% endif %}</dd>
+        </dl>
+      </section>
+    </div>
+    <div class="col-lg-6">
+      <section class="panel panel-body h-100">
+        <h2 class="h6">No portal</h2>
+        <dl class="row mb-0 small">
+          <dt class="col-7">Inscrições (confirmadas)</dt><dd class="col-5 tabular">{{ registrations }} ({{ confirmed_registrations }})</dd>
+          <dt class="col-7">Certificados válidos</dt><dd class="col-5 tabular">{{ certificates }}</dd>
+          <dt class="col-7">Atividades que organiza</dt><dd class="col-5 tabular">{{ activities }}</dd>
+          <dt class="col-7">Emissões avulsas criadas</dt><dd class="col-5 tabular">{{ batches }}</dd>
+        </dl>
+        {% if activities or batches %}<p class="small text-secondary mt-2 mb-0">Se esta pessoa deixar de ser organizadora, as atividades e emissões continuam, mas só administradores poderão gerenciá-las.</p>{% endif %}
+      </section>
+    </div>
+  </div>
+
+  {% if not is_self and not locked and not deleted %}
+    <section class="panel panel-body mt-4">
+      <h2 class="h6">Ações</h2>
+      <p class="small text-secondary">Cada ação pede a sua senha de novo se o seu login tiver mais de alguns minutos e fica registrada no histórico abaixo.</p>
+      <div class="row g-4">
+        <div class="col-md-6">
+          <form method="post" action="{% url 'user_admin_role' person.pk %}" class="d-flex gap-2 align-items-end flex-wrap">
+            {% csrf_token %}
+            <div style="flex:1;min-width:180px">
+              <label class="form-label" for="role">Papel</label>
+              <select id="role" name="role" class="form-select">
+                {% for value, label in roles %}<option value="{{ value }}"{% if person.role == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <button class="btn btn-outline-primary">Salvar papel</button>
+          </form>
+          <p class="small text-secondary mt-2 mb-0">Organizadores criam e gerenciam as próprias atividades e emissões avulsas; administradores gerenciam tudo, inclusive estas configurações. Os dois precisam da verificação em duas etapas.</p>
+        </div>
+        <div class="col-md-6 d-flex flex-column gap-2">
+          <form method="post" action="{% url 'user_admin_password_link' person.pk %}">{% csrf_token %}
+            <button class="btn btn-outline-secondary w-100"{% if not person.is_active %} disabled{% endif %}><i class="bi bi-key"></i>Enviar link de nova senha</button>
+          </form>
+          {% if not person.email_verified %}
+            <form method="post" action="{% url 'user_admin_resend_code' person.pk %}">{% csrf_token %}
+              <button class="btn btn-outline-secondary w-100"><i class="bi bi-envelope"></i>Reenviar código de confirmação</button>
+            </form>
+          {% endif %}
+          {% if person.has_mfa %}
+            <form method="post" action="{% url 'user_admin_mfa_reset' person.pk %}" data-confirm="Apagar a verificação em duas etapas de {{ person.get_full_name|default:person.username }}? As sessões abertas são encerradas e, no próximo acesso, a pessoa cadastra o aplicativo de novo." data-confirm-label="Redefinir">{% csrf_token %}
+              <button class="btn btn-outline-secondary w-100"><i class="bi bi-shield-x"></i>Redefinir duas etapas (celular perdido)</button>
+            </form>
+          {% endif %}
+          <form method="post" action="{% url 'user_admin_active' person.pk %}"{% if person.is_active %} data-confirm="Desativar a conta de {{ person.get_full_name|default:person.username }}? A pessoa sai de todos os aparelhos e não consegue entrar até alguém reativar." data-confirm-label="Desativar" data-confirm-danger{% endif %}>{% csrf_token %}
+            <input type="hidden" name="active" value="{% if person.is_active %}0{% else %}1{% endif %}">
+            {% if person.is_active %}
+              <button class="btn btn-outline-danger w-100"><i class="bi bi-person-slash"></i>Desativar conta</button>
+            {% else %}
+              <button class="btn btn-outline-success w-100"><i class="bi bi-person-check"></i>Reativar conta</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+      <details class="mt-4">
+        <summary class="text-danger">Excluir conta</summary>
+        <form method="post" action="{% url 'user_admin_delete' person.pk %}" class="mt-3" style="max-width:480px">
+          {% csrf_token %}
+          <p class="small">Apaga nome, e-mail, matrícula e respostas de inscrição. Inscrições futuras são canceladas (a vaga vai para a lista de espera). Presenças e certificados emitidos continuam no histórico, sem os dados pessoais. Não dá para desfazer.</p>
+          <label class="form-label" for="confirm">Digite EXCLUIR para confirmar</label>
+          <div class="d-flex gap-2">
+            <input id="confirm" name="confirm" class="form-control" autocomplete="off" required>
+            <button class="btn btn-danger">Excluir</button>
+          </div>
+        </form>
+      </details>
+    </section>
+  {% endif %}
+
+  {% if activities or batches %}{% if not is_self and not locked %}
+    <section class="panel panel-body mt-4">
+      <h2 class="h6">Transferir atividades e emissões</h2>
+      <p class="small text-secondary">Passa as {{ activities }} atividade{{ activities|pluralize }} e as {{ batches }} emiss{{ batches|pluralize:"ão,ões" }} avulsa{{ batches|pluralize }} desta conta para outra pessoa da equipe (por exemplo, quando alguém sai da instituição). A assinatura dos certificados já emitidos não muda.</p>
+      {% if receivers %}
+        <form method="post" action="{% url 'user_admin_transfer' person.pk %}" class="d-flex gap-2 align-items-end flex-wrap" style="max-width:560px" data-confirm="Transferir todas as atividades e emissões avulsas desta conta para a pessoa escolhida?" data-confirm-label="Transferir">
+          {% csrf_token %}
+          <div style="flex:1;min-width:220px">
+            <label class="form-label" for="to">Passar para</label>
+            <select id="to" name="to" class="form-select" required>
+              <option value="">Escolha...</option>
+              {% for r in receivers %}<option value="{{ r.pk }}">{{ r.get_full_name|default:r.username }} ({{ r.get_role_display }})</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-outline-primary"><i class="bi bi-arrow-left-right"></i>Transferir</button>
+        </form>
+      {% else %}
+        <p class="small mb-0">Não há outra conta de organizador ou administrador ativa para receber.</p>
+      {% endif %}
+    </section>
+  {% endif %}{% endif %}
+
+  <section class="panel mt-4">
+    <div class="panel-head"><h2>Histórico de alterações</h2></div>
+    {% if history %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0 small">
+          <thead><tr><th>Data e hora</th><th>Ação</th><th>Por</th><th>Detalhes</th></tr></thead>
+          <tbody>
+            {% for change in history %}
+              <tr>
+                <td class="tabular text-nowrap">{{ change.created_at|date:'d/m/Y H:i' }}</td>
+                <td>{{ change.get_action_display }}</td>
+                <td>{{ change.actor_name }}</td>
+                <td>{% for key, value in change.details.items %}{{ key }}: {{ value }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-body text-secondary small">Nenhuma alteração feita por este painel.</div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

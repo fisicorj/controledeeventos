@@ -62,6 +62,14 @@ class ReauthTests(TestCase):
         expire_reauth(self.client)
         page = self.client.post(reverse('reauth'), {'password': PASSWORD, 'code': '000000', 'next': self.url})
         self.assertContains(page, 'Código incorreto')
+        # código de recuperação não vale aqui e também não é gasto (SEC-23 da 3ª auditoria)
+        recovery = mfa.new_recovery_codes(device)
+        device.refresh_from_db()
+        before = list(device.recovery_codes)
+        page = self.client.post(reverse('reauth'), {'password': PASSWORD, 'code': recovery[0], 'next': self.url})
+        self.assertContains(page, 'Código incorreto')
+        device.refresh_from_db()
+        self.assertEqual(device.recovery_codes, before)
         code = mfa.totp(mfa.secret_of(device), mfa.current_step())
         response = self.client.post(reverse('reauth'), {'password': PASSWORD, 'code': code, 'next': self.url})
         self.assertRedirects(response, self.url)
@@ -105,3 +113,35 @@ class MfaLockoutTests(TestCase):
         self.assertIn('Sessões abertas encerradas: 2', out.getvalue())
         response = self.client.get(reverse('profile'))
         self.assertTrue(response['Location'].startswith(reverse('login')))  # voltou para o login
+
+
+class ReauthCoverageTests(TestCase):
+    """SEC-22 da 3ª auditoria: corrigir certificado, mudar a assinatura e editar lote também pedem confirmação."""
+
+    def test_acoes_que_mudam_certificados_pedem_a_senha(self):
+        admin = make_user('chefe', User.Role.ADMIN)
+        batch = CertificateBatch.objects.create(
+            title='Semana', start_date=date(2026, 1, 1), end_date=date(2026, 1, 1), issue_date=date(2026, 1, 1),
+            created_by=admin,
+        )  # fmt: skip
+        moment = timezone.now()
+        certificate = Certificate.objects.create(
+            batch=batch, participant_name='Ana', activity_title='Semana', activity_type='Evento',
+            start_date=moment, end_date=moment,
+        )  # fmt: skip
+        self.client.force_login(admin)
+        urls = [
+            reverse('certificate_correct', args=[certificate.code]),
+            reverse('site_settings'),
+            reverse('batch_edit', args=[batch.pk]),
+        ]
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)  # login recente: abre direto
+        expire_reauth(self.client)
+        for url in urls:
+            response = self.client.get(url)
+            self.assertRedirects(response, f'{reverse("reauth")}?next={url}', fetch_redirect_response=False)
+            post = self.client.post(url, {'participant_name': 'Outra'}, HTTP_REFERER=url)
+            self.assertTrue(post.url.startswith(reverse('reauth')), url)
+        certificate.refresh_from_db()
+        self.assertEqual(certificate.participant_name, 'Ana')

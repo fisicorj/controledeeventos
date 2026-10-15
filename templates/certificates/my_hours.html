@@ -60,6 +60,36 @@
   {% else %}
     <div class="panel empty-state"><i class="bi bi-award"></i>Você ainda não tem certificados. Eles aparecem aqui quando a atividade for finalizada e você tiver atingido a frequência mínima.</div>
   {% endif %}
+  {% if declarations %}
+    <section class="panel mt-4">
+      <div class="panel-head"><h2>Declarações emitidas</h2></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Código</th><th>Emitida em</th><th>Período</th><th class="text-end">Horas</th><th>Situação</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+          <tbody>
+            {% for d in declarations %}
+              <tr>
+                <td><a class="tabular" href="{% url 'declaration_verify' d.code %}" target="_blank">{{ d.code }}</a></td>
+                <td class="tabular text-nowrap">{{ d.created_at|date:'d/m/Y H:i' }}</td>
+                <td>{% if d.semester %}{{ d.semester }}{% else %}Todos{% endif %}</td>
+                <td class="tabular text-end">{{ d.total_hours }} h</td>
+                <td>{% if d.cancelled_at %}<span class="text-secondary">Cancelada</span>{% else %}Válida{% endif %}</td>
+                <td class="text-end">
+                  {% if not d.cancelled_at %}
+                    <form method="post" action="{% url 'declaration_cancel' d.code %}" data-confirm="Cancelar a declaração {{ d.code }}? Quem tiver o documento não vai mais conseguir conferi-la." data-confirm-label="Cancelar declaração" data-confirm-danger>{% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger">Cancelar</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body small text-secondary">Cada declaração tem uma página pública de conferência (pelo código ou pelo QR do PDF). Baixar de novo no mesmo dia, com a mesma lista, repete o mesmo código.</div>
+    </section>
+  {% endif %}
+
   <section class="panel panel-body mt-4">
     <h2 class="h6">Falta algum certificado de emissão avulsa?</h2>
     <p class="small text-secondary">Se ele foi enviado para outro e-mail, informe o código que aparece no certificado. O nome nele precisa ser o mesmo da sua conta.</p>

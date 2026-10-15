@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Conferir declaração de horas | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head">
+    <h1>Declaração de horas</h1>
+    <p>Lista oficial emitida pelo portal. Compare com o documento recebido: qualquer diferença indica alteração.</p>
+  </div>
+  {% if cancelled %}
+    <div class="panel">
+      <div class="panel-head" style="border-bottom-color: #f1c9c9; background: #fdf1f1; border-radius: 1rem 1rem 0 0">
+        <div>
+          <h2 class="text-danger"><i class="bi bi-x-octagon-fill me-2" aria-hidden="true"></i>Declaração cancelada</h2>
+          <p class="mb-0">Esta declaração (código <code>{{ declaration.code }}</code>) foi cancelada por quem a emitiu em {{ declaration.cancelled_at|date:'d/m/Y' }} e <strong>não tem validade</strong>. Peça uma declaração nova à pessoa.</p>
+        </div>
+      </div>
+    </div>
+  {% else %}
+  <div class="panel mb-4">
+      {% if all_valid %}
+        <div class="panel-head" style="border-bottom-color: #cfe9da; background: #eef8f2; border-radius: 1rem 1rem 0 0">
+          <h2 class="text-success"><i class="bi bi-patch-check-fill me-2" aria-hidden="true"></i>Declaração autêntica</h2>
+        </div>
+      {% else %}
+        <div class="panel-head" style="border-bottom-color: #f6e3b5; background: #fff8e6; border-radius: 1rem 1rem 0 0">
+          <div>
+            <h2 class="text-warning-emphasis"><i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>Declaração autêntica, com certificado revogado</h2>
+            <p class="mb-0">A declaração foi emitida pelo portal, mas algum certificado da lista foi revogado depois e não vale mais (marcado abaixo).</p>
+          </div>
+        </div>
+      {% endif %}
+      <dl class="row mb-0 panel-body">
+        <dt class="col-sm-4">Nome</dt><dd class="col-sm-8">{{ declaration.holder_name }}</dd>
+        <dt class="col-sm-4">Período</dt><dd class="col-sm-8">{% if declaration.semester %}Semestre {{ declaration.semester }}{% else %}Todos os semestres{% endif %}</dd>
+        <dt class="col-sm-4">Total declarado</dt><dd class="col-sm-8">{{ declaration.total_hours }} hora{{ declaration.total_hours|pluralize }}</dd>
+        <dt class="col-sm-4">Emitida em</dt><dd class="col-sm-8">{{ declaration.created_at|date:'d/m/Y H:i' }}</dd>
+        <dt class="col-sm-4">Código</dt><dd class="col-sm-8 mb-0"><code class="fs-6">{{ declaration.code }}</code></dd>
+      </dl>
+    </div>
+    <section class="panel">
+      <div class="panel-head"><h2>Certificados da declaração</h2></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Atividade</th><th>Data</th><th class="text-end">Horas</th><th>Código</th><th>Situação</th></tr></thead>
+          <tbody>
+            {% for r in rows %}
+              <tr>
+                <td>{{ r.atividade }}{% if r.vinculado %} *{% endif %}<div class="small text-secondary">{{ r.tipo }}</div></td>
+                <td class="tabular text-nowrap">{{ r.data|slice:"8:10" }}/{{ r.data|slice:"5:7" }}/{{ r.data|slice:":4" }}</td>
+                <td class="tabular text-end">{% if r.horas %}{{ r.horas }} h{% else %}-{% endif %}</td>
+                <td><a class="tabular" href="{% url 'certificate_verify_code' r.codigo %}">{{ r.codigo }}</a></td>
+                <td>{% if r.valid %}<span class="text-success">válido</span>{% else %}<span class="text-danger fw-semibold">revogado</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if any_claimed %}<div class="panel-body small text-secondary">* Certificado de emissão avulsa vinculado à conta pela própria pessoa, com o código do certificado.</div>{% endif %}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

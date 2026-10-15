@@ -1,9 +1,10 @@
-"""Confirmação de identidade antes de ações críticas (SEC-19 da 2ª auditoria).
+"""Confirmação de identidade antes de ações críticas (SEC-19 da 2ª auditoria e SEC-22 da 3ª).
 
-Revogar certificado, cancelar emissão avulsa e mexer na configuração de e-mail pedem que a pessoa tenha provado
-quem é há pouco tempo: o login (com a segunda etapa) vale por REAUTH_MINUTES; depois disso, a tela pede a senha
-de novo (e o código do aplicativo, para quem usa a verificação em duas etapas). Quem pegou uma sessão aberta
-esquecida não consegue fazer essas ações.
+Revogar ou corrigir certificado, editar ou cancelar emissão avulsa e mexer nas Configurações (instituição e
+assinatura, e-mail, usuários, faxina) pedem que a pessoa tenha provado quem é há pouco tempo: o login (com a
+segunda etapa) vale por REAUTH_MINUTES; depois disso, a tela pede a senha de novo (e o código do aplicativo,
+para quem usa a verificação em duas etapas). Quem pegou uma sessão aberta esquecida não consegue fazer essas
+ações.
 """
 
 from functools import wraps

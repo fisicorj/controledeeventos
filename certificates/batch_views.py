@@ -360,6 +360,7 @@ def batch_detail(request, pk):
 
 
 @login_required
+@require_recent_auth
 def batch_edit(request, pk):
     batch = _get_batch(request, pk)
     if batch is None:

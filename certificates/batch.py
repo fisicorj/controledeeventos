@@ -43,7 +43,13 @@ def active(batch):
 
 
 def signer_for(batch):
-    return batch.created_by.get_full_name() or batch.created_by.username
+    """Quem assina os certificados do lote quando a instituição não tem signatário próprio."""
+    return batch.signer_name or batch.created_by.get_full_name() or batch.created_by.username
+
+
+def activity_signer(activity):
+    """Idem para os certificados de uma atividade."""
+    return activity.signer_name or activity.organizer.get_full_name() or activity.organizer.username
 
 
 @transaction.atomic
@@ -165,8 +171,7 @@ def pdf_attachment(certificate_id):
     if certificate.batch_id:
         signer = signer_for(certificate.batch)
     else:
-        organizer = certificate.registration.activity.organizer
-        signer = organizer.get_full_name() or organizer.username
+        signer = activity_signer(certificate.registration.activity)
     return pdf_filename(certificate), certificate_pdf(certificate, signer_name=signer), 'application/pdf'
 
 

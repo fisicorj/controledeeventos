@@ -17,7 +17,8 @@ class Command(BaseCommand):
         '5 minutos devolve à fila de espera as vagas não confirmadas no prazo e apaga o conteúdo dos e-mails '
         'enviados há mais de OUTBOX_RETENTION_DAYS dias; de hora em hora envia os lembretes de véspera '
         '(desligue com --sem-lembretes se eles já estiverem agendados no cron); e uma vez por dia faz a faxina '
-        '(run_maintenance).'
+        '(run_maintenance). Também monta os ZIPs de lotes grandes, um por volta; com um serviço só para eles '
+        '(--so-zips), use --sem-zips aqui para os e-mails não esperarem um ZIP de milhares de PDFs.'
     )
 
     def add_arguments(self, parser):
@@ -26,8 +27,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--sem-lembretes', action='store_true', help='Não envia os lembretes de véspera (já agendados no cron).'
         )
+        parser.add_argument('--sem-zips', action='store_true', help='Não monta ZIPs (há um serviço --so-zips).')
+        parser.add_argument('--so-zips', action='store_true', help='Só monta os ZIPs de lotes grandes.')
 
-    def handle(self, *args, continuo, intervalo, sem_lembretes, **options):
+    def handle(self, *args, continuo, intervalo, sem_lembretes, sem_zips=False, so_zips=False, **options):
+        if so_zips:
+            return self.zips_only(continuo, intervalo)
         schedule = [(UPKEEP_EVERY, self.upkeep), (MAINTENANCE_EVERY, self.maintenance)]
         if not sem_lembretes:
             schedule.append((REMINDERS_EVERY, self.reminders))
@@ -39,7 +44,9 @@ class Command(BaseCommand):
                         last_run[task] = time.monotonic()
                         task()
                 close_old_connections()  # rodando por dias: renova a conexão com o banco se ela caiu
-            self.zips()
+            self.requested_maintenance()
+            if not sem_zips:
+                self.zips(limit=1)  # um por volta: entre um ZIP e outro, os e-mails pendentes saem
             sent, failed = outbox.process()
             if sent or failed or not continuo:
                 self.stdout.write(f'E-mails enviados: {sent}. Falhas: {failed}.')
@@ -47,12 +54,32 @@ class Command(BaseCommand):
                 return
             time.sleep(max(intervalo, 1))
 
-    def zips(self):
+    def requested_maintenance(self):
+        """Faxina pedida pelo botão "Rodar agora" em Configurações > Manutenção."""
+        from core import maintenance
+
+        try:
+            maintenance.run_queued(log=self.stdout.write)
+        except Exception as exc:  # o envio de e-mails não pode parar por causa disso
+            self.stderr.write(f'Falha na faxina pedida pela tela: {exc}')
+
+    def zips_only(self, continuo, intervalo):
+        """Serviço só de ZIPs (DES-04 da 3ª auditoria): um lote de milhares de PDFs leva minutos e, no laço
+        principal, seguraria confirmações de inscrição e códigos de verificação."""
+        while True:
+            if continuo:
+                close_old_connections()
+            self.zips()
+            if not continuo:
+                return
+            time.sleep(max(intervalo, 1))
+
+    def zips(self, limit=None):
         """ZIPs de lotes grandes pedidos na tela da emissão avulsa (certificates/zips.py)."""
         from certificates import zips
 
         try:
-            built = zips.process()
+            built = zips.process(limit=limit)
         except Exception as exc:  # o envio de e-mails não pode parar por causa disso
             self.stderr.write(f'Falha ao gerar ZIP de certificados: {exc}')
         else:

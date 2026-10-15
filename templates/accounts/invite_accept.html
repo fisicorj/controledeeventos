@@ -1,0 +1,22 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Convite para a equipe | {{ portal.portal_name }}{% endblock %}
+{% block side_title %}Bem-vindo à equipe{% endblock %}
+{% block heading %}{% if invalid %}Convite inválido{% else %}Aceitar convite{% endif %}{% endblock %}
+{% block intro %}
+  {% if invalid %}
+    <p class="text-secondary">Este link não vale mais: já foi usado, foi cancelado ou venceu. Peça um novo convite a quem convidou você.</p>
+  {% else %}
+    <p class="text-secondary">Você foi convidado como <strong>{{ invite.get_role_display|lower }}</strong>. A conta usa o e-mail <strong>{{ invite.email }}</strong>, que já fica confirmado. No primeiro acesso, o portal pede o cadastro de um aplicativo autenticador.</p>
+  {% endif %}
+{% endblock %}
+{% block form %}
+  {% if invalid %}
+    <a class="btn btn-outline-secondary w-100" href="{% url 'login' %}">Ir para o login</a>
+  {% else %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <button class="btn btn-primary w-100 py-2 mt-4">Criar conta</button>
+    </form>
+  {% endif %}
+{% endblock %}

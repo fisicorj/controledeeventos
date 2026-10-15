@@ -1,5 +1,7 @@
 """Avisos de configuração mostrados pelo "python manage.py check --deploy" (SEC-13)."""
 
+import os
+
 from django.conf import settings
 from django.core.checks import Tags, Warning, register
 
@@ -34,4 +36,25 @@ def arena_deploy_checks(app_configs, **kwargs):
                 id='arena.W003',
             )
         )
+    # Senha do papel da aplicação e, se houver, a do dono das tabelas (só presente onde roda o migrate).
+    passwords = [('DB_PASSWORD', settings.DATABASES['default'].get('PASSWORD') or '')]
+    if settings.DB_MIGRATE_USER:
+        passwords.append(('DB_MIGRATE_PASSWORD', os.getenv('DB_MIGRATE_PASSWORD', '')))
+    for name, password in passwords:
+        if _weak(password):
+            warnings.append(
+                Warning(
+                    f'A senha do banco ({name}) é fraca ou é a do exemplo.',
+                    hint='Use uma senha longa e aleatória, ex.: '
+                    'python -c "import secrets; print(secrets.token_urlsafe(24))".',
+                    id='arena.W004',
+                )
+            )
     return warnings
+
+
+WEAK_PASSWORDS = {'', 'arena_password', 'postgres', 'password', 'senha', '123456'}
+
+
+def _weak(password):
+    return password.lower() in WEAK_PASSWORDS or len(password) < 12

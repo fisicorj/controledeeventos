@@ -160,7 +160,7 @@ def _confirm_action(request):
     if _blocked(request):
         messages.error(request, 'Muitas tentativas. Aguarde 15 minutos e tente de novo.')
         return False
-    if form.is_valid() and mfa.verify(user, form.cleaned_data['code']) == 'totp':
+    if form.is_valid() and mfa.verify_totp(user, form.cleaned_data['code']):
         _right(request)
         return True
     _wrong(request)
@@ -223,7 +223,7 @@ def reauth_view(request):
         elif not user.check_password(form.cleaned_data['password']):
             _wrong(request)
             form.add_error('password', 'Senha incorreta.')
-        elif uses_mfa and mfa.verify(user, form.cleaned_data.get('code') or '') != 'totp':
+        elif uses_mfa and not mfa.verify_totp(user, form.cleaned_data.get('code') or ''):
             _wrong(request)
             form.add_error('code', 'Código incorreto ou já usado. Use o código atual do aplicativo.')
         else:

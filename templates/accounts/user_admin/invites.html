@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Convites | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'user_admin_list' %}">Usuários</a></div>
+    <h1>Convidar para a equipe</h1>
+    <p>A pessoa recebe um link por e-mail, cria a conta e já entra como organizador ou administrador, com o e-mail confirmado. O link vale por 7 dias e uma vez só. Quem já tem conta no portal não precisa de convite: mude o papel na página da conta.</p>
+  </div>
+
+  <form method="post" class="panel panel-body mb-4" novalidate>
+    {% csrf_token %}
+    <div class="row g-3 align-items-end">
+      <div class="col-md-6">{% include 'core/_field.html' with field=form.email %}</div>
+      <div class="col-md-3">{% include 'core/_field.html' with field=form.role %}</div>
+      <div class="col-md-3"><button class="btn btn-primary w-100"><i class="bi bi-send"></i>Enviar convite</button></div>
+    </div>
+  </form>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Convites</h2></div>
+    {% if invites %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>E-mail</th><th>Papel</th><th>Enviado</th><th>Situação</th><th class="text-end"><span class="visually-hidden">Ações</span></th></tr></thead>
+          <tbody>
+            {% for i in invites %}
+              <tr>
+                <td class="text-break">{{ i.email }}</td>
+                <td>{{ i.get_role_display }}</td>
+                <td class="tabular text-nowrap">{{ i.created_at|date:'d/m/Y H:i' }}<div class="small text-secondary">por {{ i.created_by.get_full_name|default:i.created_by.username }}</div></td>
+                <td>
+                  {% if i.accepted_at %}Aceito em {{ i.accepted_at|date:'d/m/Y' }}{% if i.accepted_user %}: <a href="{% url 'user_admin_detail' i.accepted_user.pk %}">{{ i.accepted_user.username }}</a>{% endif %}
+                  {% elif i.cancelled_at %}<span class="text-secondary">Cancelado</span>
+                  {% elif i.is_open %}Aguardando (vence em {{ i.expires_at|date:'d/m/Y' }})
+                  {% else %}<span class="text-secondary">Venceu</span>{% endif %}
+                </td>
+                <td class="text-end">
+                  {% if i.is_open %}
+                    <form method="post" action="{% url 'user_admin_invite_cancel' i.pk %}" data-confirm="Cancelar o convite para {{ i.email }}? O link deixa de valer." data-confirm-label="Cancelar convite" data-confirm-danger>{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Cancelar</button></form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="panel-body text-secondary">Nenhum convite enviado.</div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
