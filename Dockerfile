@@ -1,6 +1,6 @@
 # Para fixar a imagem exata (recomendado em produção), rode uma vez: bash scripts/pin_base_image.sh
 # O script troca a linha abaixo por python:3.12-slim@sha256:<digest>. O Dependabot avisa quando sair versão nova.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
