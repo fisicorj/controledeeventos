@@ -1,0 +1,14 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if again %}Recebemos a versão corrigida{% else %}Recebemos o seu trabalho{% endif %} para "{{ activity.title }}":
+
+Título: {{ submission.title }}{% if submission.area %}
+Área: {{ submission.area }}{% endif %}
+Autores: {{ submission.author_names }}
+Versão: {{ submission.version }}
+
+Acompanhe a avaliação em: {{ submission_url }}
+{% if not again %}Até {{ submission.call.closes_at|date:'d/m/Y \à\s H:i' }} você ainda pode trocar o arquivo ou corrigir os dados, enquanto a avaliação não começar.{% endif %}
+
+{{ institution }}
+{% endautoescape %}

@@ -1,5 +1,7 @@
 from django import forms
+from django.db.models import Q
 
+from core.images import setup_image_fields
 from core.text import single_line
 
 from .models import Activity, Announcement, Material, RegistrationQuestion, Session, Speaker, SpotCategory
@@ -52,7 +54,11 @@ class ActivityForm(forms.ModelForm):
             'waitlist_enabled',
             'waitlist_offer_hours',
             'access_code',
+            'per_session',
             'certificate_enabled',
+            'speaker_certificate',
+            'presenter_certificate',
+            'presenter_requires_attendance',
             'workload_hours',
             'min_attendance_percent',
             'survey_enabled',
@@ -82,6 +88,7 @@ class ActivityForm(forms.ModelForm):
             is_checkbox = isinstance(f.widget, forms.CheckboxInput)
             f.widget.attrs['class'] = 'form-check-input' if is_checkbox else 'form-control'
         self.fields['description'].widget.attrs['rows'] = 5
+        setup_image_fields(self)
         self.fields['waitlist_offer_hours'].required = False
         has_people = (
             self.instance.pk and self.instance.registrations.filter(status__in=['CONFIRMED', 'WAITLISTED']).exists()
@@ -125,11 +132,53 @@ class ActivityForm(forms.ModelForm):
             raise forms.ValidationError('Esta mudança de situação não é permitida.')
         return status
 
+    def clean_per_session(self):
+        """Mudar o modo depois de emitir certificados (ou, para desligar, com sessões já escolhidas) misturaria
+        as duas regras de certificado."""
+        value = self.cleaned_data.get('per_session', False)
+        activity = self.instance
+        if not activity.pk or value == activity.per_session:  # o instance só recebe os dados novos depois
+            return value
+        from certificates.models import Certificate
+        from registrations.models import SessionEnrollment
+
+        if (
+            activity.status == Activity.Status.FINISHED
+            or Certificate.objects.filter(
+                Q(registration__activity=activity) | Q(session_enrollment__session__activity=activity)
+            ).exists()
+        ):
+            raise forms.ValidationError('A atividade já tem certificados emitidos: o modo não pode mais mudar.')
+        if (
+            not value
+            and SessionEnrollment.objects.filter(
+                session__activity=activity, status__in=['CONFIRMED', 'WAITLISTED']
+            ).exists()
+        ):
+            raise forms.ValidationError(
+                'Os participantes já escolheram sessões. Para voltar à inscrição só no evento, fale com eles antes: '
+                'as escolhas e as listas de espera das sessões deixariam de valer.'
+            )
+        return value
+
+    def save(self, commit=True):
+        activity = super().save(commit=commit)
+        if commit and activity.per_session:
+            # Sessões cadastradas antes, sem vagas: começam com as vagas do evento (dá para ajustar depois).
+            self.sessions_filled = activity.sessions.filter(capacity__isnull=True).update(capacity=activity.capacity)
+        return activity
+
 
 class SessionForm(forms.ModelForm):
+    notify_change = forms.BooleanField(
+        label='Avisar por e-mail quem vai a esta sessão se o horário ou o local mudarem',
+        required=False,
+        initial=True,
+    )
+
     class Meta:
         model = Session
-        fields = ['title', 'start_at', 'end_at', 'location', 'speakers', 'check_in_open']
+        fields = ['title', 'start_at', 'end_at', 'location', 'capacity', 'workload_hours', 'speakers', 'check_in_open']
         labels = {
             'title': 'Título',
             'start_at': 'Início',
@@ -157,10 +206,22 @@ class SessionForm(forms.ModelForm):
         speakers.help_text = (
             'Cadastre os palestrantes na página de gestão da atividade.' if not speakers.queryset.exists() else ''
         )
+        activity = self.instance.activity if self.instance.activity_id else None
+        if not self.instance.pk:
+            del self.fields['notify_change']  # sessão nova: ainda não há a quem avisar
+        if activity is None or not activity.per_session:
+            # Vagas e carga horária por sessão só valem quando os participantes escolhem as sessões.
+            del self.fields['capacity']
+            del self.fields['workload_hours']
+        else:
+            self.fields['capacity'].required = True
+            if not self.instance.pk:
+                self.initial.setdefault('capacity', activity.capacity)
         for name, f in self.fields.items():
             if name == 'speakers':
                 continue
-            f.widget.attrs['class'] = 'form-check-input' if name == 'check_in_open' else 'form-control'
+            checkbox = name in ('check_in_open', 'notify_change')
+            f.widget.attrs['class'] = 'form-check-input' if checkbox else 'form-control'
 
 
 class QuestionForm(forms.ModelForm):
@@ -187,7 +248,7 @@ class QuestionForm(forms.ModelForm):
 class SpeakerForm(forms.ModelForm):
     class Meta:
         model = Speaker
-        fields = ['name', 'role', 'bio', 'photo', 'link', 'order']
+        fields = ['name', 'role', 'bio', 'photo', 'link', 'email', 'document', 'order']
         widgets = {'bio': forms.Textarea(attrs={'rows': 4})}
 
     def __init__(self, *args, activity=None, **kwargs):
@@ -196,7 +257,7 @@ class SpeakerForm(forms.ModelForm):
             self.instance.activity = activity
             if not self.instance.pk:
                 self.initial.setdefault('order', activity.speakers.count() + 1)
-        self.fields['photo'].widget.attrs['accept'] = 'image/*'
+        setup_image_fields(self)
 
     def clean_photo(self):
         photo = self.cleaned_data.get('photo')

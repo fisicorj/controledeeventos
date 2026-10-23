@@ -155,3 +155,6 @@
       .forEach((k) => caches.delete(k))).catch(() => {});
   }));
 })();
+
+// Botões de imprimir (relatórios): o CSP não deixa usar onclick no HTML.
+document.querySelectorAll('[data-print]').forEach((button) => button.addEventListener('click', () => window.print()));

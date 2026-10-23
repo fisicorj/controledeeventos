@@ -53,9 +53,20 @@
     </section>
 
     <section class="panel mb-4">
+      <div class="panel-head"><h2>Sessões</h2></div>
+      <div class="panel-body">
+        {% include 'core/_field.html' with field=form.per_session %}
+        <p class="small text-secondary mb-0">A inscrição continua sendo no evento, com as vagas acima. Cada sessão ganha o seu número de vagas (no cadastro da sessão) e o certificado sai por sessão, com a data e a carga horária dela. Nesse modo, a carga horária e a frequência mínima abaixo não são usadas.</p>
+      </div>
+    </section>
+
+    <section class="panel mb-4">
       <div class="panel-head"><h2>Certificado</h2></div>
       <div class="panel-body">
         {% include 'core/_field.html' with field=form.certificate_enabled %}
+        {% include 'core/_field.html' with field=form.speaker_certificate %}
+        {% include 'core/_field.html' with field=form.presenter_certificate %}
+        <div class="ms-4">{% include 'core/_field.html' with field=form.presenter_requires_attendance %}</div>
         <div class="row g-3">
           <div class="col-md-6">{% include 'core/_field.html' with field=form.workload_hours %}</div>
           <div class="col-md-6">{% include 'core/_field.html' with field=form.min_attendance_percent %}</div>

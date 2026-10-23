@@ -71,9 +71,12 @@ def _fold(line):
     return '\r\n '.join(parts)
 
 
-def ics(activity, page_url, institution):
-    """Arquivo .ics com um evento por sessão (ou a atividade inteira, se não houver sessões)."""
-    sessions = list(activity.sessions.all())
+def ics(activity, page_url, institution, sessions=None):
+    """Arquivo .ics com um evento por sessão (ou a atividade inteira, se não houver sessões).
+
+    sessions: só estas sessões (agenda pessoal, com as sessões escolhidas pela pessoa). Lista vazia ou None
+    usam a regra acima."""
+    sessions = list(sessions) if sessions else list(activity.sessions.all())
     items = (
         [
             (f'{activity.title}: {s.title}', s.start_at, s.end_at, s.location or activity.location, s.pk)

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
@@ -97,11 +98,39 @@ def admin_logout(request):
     return response
 
 
+SIGNUP_PERIOD = 3600
+
+
+def _signup_key(request):
+    from core.http import client_ip
+
+    return ('signup-ip', client_ip(request) or '-')
+
+
+def _signup_blocked(request):
+    """O IP já criou SIGNUPS_PER_IP_HOUR contas na última hora? Contam só os cadastros feitos: um laboratório
+    inteiro atrás do mesmo IP errando a senha não se bloqueia."""
+    from core import throttle
+
+    return throttle.blocked(settings.SIGNUPS_PER_IP_HOUR, SIGNUP_PERIOD, *_signup_key(request))
+
+
+def _count_signup(request):
+    from core import throttle
+
+    throttle.hit(settings.SIGNUPS_PER_IP_HOUR, SIGNUP_PERIOD, *_signup_key(request))
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect('home')
     form = SignUpForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
+    if request.method == 'POST' and _signup_blocked(request):
+        form.is_valid()
+        form.add_error(
+            None, 'Muitos cadastros feitos a partir desta rede na última hora. Espere um pouco e tente de novo.'
+        )
+    elif request.method == 'POST' and form.is_valid():
         try:
             with transaction.atomic():
                 # Conta antiga que nunca confirmou este e-mail sai do caminho, quando não tem histórico
@@ -115,6 +144,7 @@ def signup(request):
             form.add_error('username', 'Este nome de usuário acabou de ser escolhido por outra pessoa. Escolha outro.')
             context = {'form': form, 'domains': SiteSettings.load().student_domains()}
             return render(request, 'accounts/signup.html', context)
+        _count_signup(request)
         # A resposta é a mesma se o e-mail já tiver conta confirmada: o código não sai, e o dono do e-mail
         # recebe um aviso (verification.send_code). Assim o cadastro não revela quem tem conta.
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')

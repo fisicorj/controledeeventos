@@ -15,6 +15,14 @@ def issue_certificates(activity, request=None):
     """
     if not activity.certificate_enabled:
         return []
+    from .roles import issue_role_certificates
+
+    if activity.per_session:
+        return _issue_session_certificates(activity, request) + issue_role_certificates(activity, request)
+    return _issue_attendee_certificates(activity, request) + issue_role_certificates(activity, request)
+
+
+def _issue_attendee_certificates(activity, request=None):
     sessions, rows = participation(activity)
     if not sessions:
         return []
@@ -41,6 +49,47 @@ def issue_certificates(activity, request=None):
     return issued
 
 
+def _issue_session_certificates(activity, request=None):
+    """Certificado por sessão: um para cada sessão escolhida (confirmada) em que a pessoa teve presença."""
+    from attendance.models import Attendance
+    from registrations.models import Registration, SessionEnrollment
+
+    present = set(Attendance.objects.filter(session__activity=activity).values_list('registration_id', 'session_id'))
+    enrollments = (
+        SessionEnrollment.objects.filter(
+            session__activity=activity,
+            status=SessionEnrollment.Status.CONFIRMED,
+            offer_expires_at__isnull=True,
+            registration__status=Registration.Status.CONFIRMED,
+            certificate__isnull=True,
+        )
+        .select_related('registration__user', 'registration__activity', 'session')
+        .order_by('session__start_at', 'id')
+    )
+    issued = []
+    for enrollment in enrollments:
+        if (enrollment.registration_id, enrollment.session_id) not in present:
+            continue
+        user, session = enrollment.registration.user, enrollment.session
+        issued.append(
+            Certificate.objects.create(
+                session_enrollment=enrollment,
+                participant_name=user.get_full_name() or user.username,
+                participant_document=user.institutional_id,
+                activity_title=session.title,
+                event_title=activity.title,
+                activity_type=activity.get_activity_type_display(),
+                start_date=session.start_at,
+                end_date=session.end_at,
+                workload_hours=session.certificate_hours,
+                attendance_percent=100,
+            )
+        )
+    audit.record(audit.Action.ISSUED, issued, request=request, details={'source': 'Sessão de atividade do sistema'})
+    notifications.notify_certificates(issued)
+    return issued
+
+
 @transaction.atomic
 def finish_activity(activity, request=None, check_status=True):
     """Encerra a atividade: fecha o check-in de todas as sessões e emite os certificados.
@@ -61,7 +110,7 @@ def finish_activity(activity, request=None, check_status=True):
         # Quem recebeu certificado já ganha o convite da pesquisa no mesmo e-mail.
         from registrations.survey import eligible
 
-        certified = {c.registration_id for c in issued}
+        certified = {c.owner_registration.pk for c in issued if c.owner_registration}
         others = [r for r in eligible(activity).select_related('user', 'activity') if r.id not in certified]
         notifications.notify_survey(others)
     return issued

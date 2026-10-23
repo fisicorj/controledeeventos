@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Lembrete {% if sessions|length == 1 %}da sessão que você escolheu{% else %}das sessões que você escolheu{% endif %} em "{{ activity.title }}":
+{% for s in sessions %}
+- {{ s.title }}: {{ s.start_at|date:'d/m/Y \à\s H:i' }} até {{ s.end_at|date:'H:i' }}{% if s.location %} ({{ s.location }}){% elif activity.location %} ({{ activity.location }}){% endif %}{% endfor %}
+
+O seu QR Code segue anexo: apresente-o na entrada de cada sessão.
+Se não puder ir, saia da sessão (até ela começar) para liberar a vaga: {{ sessions_url }}
+
+{{ institution }}
+{% endautoescape %}

@@ -125,7 +125,7 @@ class SiteSettingsTests(TestCase):
             reverse('site_settings'),
             {'portal_name': 'X', 'primary_color': '#123456', 'institution_name': 'X', 'logo': fake},
         )
-        self.assertContains(response, 'Envie uma imagem válida')
+        self.assertContains(response, 'Envie a imagem em JPG, PNG ou WebP')
 
     def test_imagem_apagada_do_disco_nao_quebra_o_pdf(self):
         site = SiteSettings.load()

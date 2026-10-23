@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Avaliar trabalho | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_reviews' %}">Avaliações</a></div>
+    <h1>{{ submission.title }}</h1>
+    <p>{{ call.activity.title }}{% if submission.area %} · {{ submission.area }}{% endif %} · versão {{ submission.version }}{% if show_authors %} · {{ submission.author_names }}{% else %} · avaliação às cegas{% endif %}{% if editable and not review.is_done and review.due_at %} · {% if review.is_overdue %}<span class="text-danger">prazo terminou em {{ review.due_at|date:'d/m/Y H:i' }}</span>{% else %}prazo até {{ review.due_at|date:'d/m/Y H:i' }}{% endif %}{% endif %}</p>
+  </div>
+  <section class="panel panel-body mb-4">
+    <h2 class="h6">Resumo</h2>
+    <div class="small">{{ submission.abstract|linebreaksbr }}</div>
+    {% if submission.keywords %}<p class="small text-secondary mt-2 mb-0">Palavras-chave: {{ submission.keywords }}</p>{% endif %}
+    {% if submission.file %}<p class="mt-3 mb-0"><a class="btn btn-outline-primary btn-sm" href="{% url 'submission_file' submission.pk %}" target="_blank"><i class="bi bi-file-earmark-text"></i>Abrir o trabalho</a></p>{% else %}<p class="mt-3 mb-0 small text-secondary">Arquivo removido.</p>{% endif %}
+  </section>
+  {% if editable %}
+    <form method="post" class="panel panel-body" novalidate>
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <div class="d-flex gap-2 mt-4"><button class="btn btn-primary px-4">{% if review.is_done %}Atualizar avaliação{% else %}Enviar avaliação{% endif %}</button></div>
+    </form>
+    {% if not review.is_done %}
+      <details class="panel panel-body mt-3"{% if decline_form.errors %} open{% endif %}>
+        <summary class="fw-semibold">Não posso avaliar este trabalho</summary>
+        <form method="post" class="mt-3" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="decline" value="1">
+          <p class="small text-secondary">A designação sai da sua lista e a organização é avisada para escolher outra pessoa. Se você conhece os autores ou trabalha com eles, marque conflito de interesse.</p>
+          {% include 'core/_form.html' with form=decline_form %}
+          <button class="btn btn-outline-secondary text-danger mt-2">Recusar a designação</button>
+        </form>
+      </details>
+    {% endif %}
+  {% else %}
+    <div class="alert alert-info">{% if submission.status == 'REVISION' %}O autor está corrigindo o trabalho. Você recebe um e-mail quando a nova versão chegar.{% else %}Este trabalho já tem decisão da organização.{% endif %}</div>
+  {% endif %}
+</main>
+{% endblock %}

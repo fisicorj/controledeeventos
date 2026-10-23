@@ -54,7 +54,13 @@ def verify_code(request, code):
 def download(request, code):
     certificate = get_object_or_404(
         Certificate.objects.select_related(
-            'registration__activity__organizer', 'registration__user', 'batch__created_by'
+            'registration__activity__organizer',
+            'registration__user',
+            'session_enrollment__registration__activity__organizer',
+            'session_enrollment__registration__user',
+            'speaker__activity__organizer',
+            'submission__call__activity__organizer',
+            'batch__created_by',
         ),
         code=code,
     )
@@ -67,24 +73,34 @@ def download(request, code):
             if not own_batch:
                 raise Http404
         signer = signer_for(certificate.batch)
+    elif certificate.speaker_id or certificate.submission_id:
+        from .history import owns
+
+        activity = certificate.source_activity
+        own_batch = owns(request.user, certificate)  # palestrante ou autor do trabalho: download sem auditoria
+        if not own_batch and not can_manage(request.user, activity):
+            raise Http404
+        signer = activity_signer(activity)
     else:
-        activity = certificate.registration.activity
-        own = certificate.registration.user_id == request.user.id
+        registration = certificate.owner_registration
+        activity = registration.activity
+        own = registration.user_id == request.user.id
         if not own and not can_manage(request.user, activity):
             raise Http404
         if own and not can_manage(request.user, activity):
             from registrations.survey import needs_survey
 
-            if needs_survey(certificate.registration):
+            if needs_survey(registration):
                 messages.info(request, 'Responda a pesquisa de satisfação para liberar o seu certificado.')
-                return redirect('survey', pk=certificate.registration_id)
+                return redirect('survey', pk=registration.pk)
         signer = activity_signer(activity)
     if certificate.is_revoked:
         messages.error(request, 'Este certificado foi revogado e não pode mais ser baixado.')
         return redirect('certificate_verify_code', code=certificate.code)
     pdf = certificate_pdf(certificate, signer_name=signer)
     # Downloads da equipe ficam na auditoria; o do próprio participante, não (ver README).
-    if not own_batch and not (certificate.registration_id and certificate.registration.user_id == request.user.id):
+    owner = certificate.owner_registration
+    if not own_batch and not (owner and owner.user_id == request.user.id):
         audit.record(audit.Action.DOWNLOADED, [certificate], request=request, details={'via': 'pdf'})
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="certificado-{certificate.code}.pdf"'
@@ -109,7 +125,7 @@ def my_hours(request):
         for label, items, _ in semesters:
             for c in items:
                 date = c.certificate_date.strftime('%d/%m/%Y')
-                writer.writerow([label, c.activity_title, c.activity_type, date, c.workload_hours or '', c.code])
+                writer.writerow([label, c.full_title, c.activity_type, date, c.workload_hours or '', c.code])
         return response
     if request.GET.get('formato') == 'pdf':
         from .declaration import TooMany, declaration_pdf, record
@@ -231,3 +247,56 @@ def declaration_verify(request, code):
             'any_claimed': any(r['vinculado'] for r in rows),
         },
     )
+
+
+BULK_LIMIT = 50  # códigos por consulta na verificação em lote
+
+
+def verify_bulk(request):
+    """Verificação em lote (P3 da 4ª auditoria): instituições parceiras colam vários códigos, de certificado ou de
+    declaração de horas, e conferem de uma vez. Cada código inexistente conta no mesmo limite por IP da validação
+    individual, então a página não serve para testar códigos ao acaso."""
+    import re
+
+    from core import throttle
+    from core.http import client_ip
+
+    context = {'limit': BULK_LIMIT}
+    if request.method != 'POST':
+        return render(request, 'certificates/verify_bulk.html', context)
+    ip = client_ip(request) or '-'
+    raw = request.POST.get('codigos', '')
+    tokens = [t for t in re.split(r'[\s,;]+', raw) if t][: BULK_LIMIT + 1]
+    context['raw'] = raw
+    if len(tokens) > BULK_LIMIT:
+        context['error'] = f'Cole no máximo {BULK_LIMIT} códigos por vez.'
+        return render(request, 'certificates/verify_bulk.html', context)
+    codes = [normalize_code(t) for t in tokens]
+    certificates = {
+        c.code: c for c in Certificate.objects.filter(code__in=[c for c in codes if c]).select_related('batch')
+    }
+    declarations = {d.code: d for d in HoursDeclaration.objects.filter(code__in=[c for c in codes if c])}
+    rows = []
+    for typed, code in zip(tokens, codes, strict=True):
+        if throttle.blocked(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip):
+            context['throttled'] = True
+            break
+        certificate, declaration = certificates.get(code), declarations.get(code)
+        if certificate:
+            cancelled = certificate.batch is not None and certificate.batch.is_cancelled
+            valid = not certificate.is_revoked and not cancelled
+            rows.append({'typed': typed, 'code': code, 'kind': 'Certificado', 'valid': valid, 'item': certificate})
+        elif declaration:
+            valid = declaration.cancelled_at is None
+            rows.append({'typed': typed, 'code': code, 'kind': 'Declaração de horas', 'valid': valid,
+                         'item': declaration})  # fmt: skip
+        else:
+            throttle.hit(VERIFY_MISSES, VERIFY_PERIOD, 'verify-miss', ip)
+            rows.append({'typed': typed, 'code': code, 'kind': None, 'valid': False, 'item': None})
+    context['rows'] = rows
+    context['summary'] = {
+        'valid': sum(1 for r in rows if r['valid']),
+        'invalid': sum(1 for r in rows if r['item'] and not r['valid']),
+        'missing': sum(1 for r in rows if not r['item']),
+    }
+    return render(request, 'certificates/verify_bulk.html', context)

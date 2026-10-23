@@ -183,7 +183,12 @@ class WorkerScheduleTests(TestCase):
         return calls
 
     def test_worker_roda_lembretes_e_faxina(self):
+        from core.models import PeriodicTask
+
         self.assertEqual(sorted(self.run_worker()), ['maintenance', 'reminders', 'upkeep'])
+        # Outro worker logo em seguida não repete: a vez de cada rotina fica registrada no banco.
+        self.assertEqual(self.run_worker(), [])
+        PeriodicTask.objects.all().delete()
         self.assertEqual(sorted(self.run_worker('--sem-lembretes')), ['maintenance', 'upkeep'])
 
     def test_lembretes_pelo_worker(self):

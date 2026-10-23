@@ -1,0 +1,9 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Boa notícia: abriu uma vaga na sessão "{{ session.title }}" ({{ session.start_at|date:'d/m/Y \à\s H:i' }}) e você saiu da lista de espera. A sua vaga nela já está confirmada.
+
+{% include 'emails/_activity_info.txt' %}{% include 'emails/_sessions.txt' %}
+Se não puder mais assistir, saia da sessão pelo mesmo link para liberar a vaga.
+
+{{ institution }}
+{% endautoescape %}

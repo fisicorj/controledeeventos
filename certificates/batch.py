@@ -165,13 +165,15 @@ def pdf_attachment(certificate_id):
     """Anexo gerado na hora do envio pela fila de e-mails (core/outbox.py)."""
     from core.outbox import PermanentError
 
-    certificate = Certificate.objects.select_related('batch__created_by').get(pk=certificate_id)
+    certificate = Certificate.objects.select_related(
+        'batch__created_by', 'registration__activity', 'session_enrollment__registration__activity'
+    ).get(pk=certificate_id)
     if certificate.is_revoked:
         raise PermanentError('O certificado foi revogado antes do envio.')
     if certificate.batch_id:
         signer = signer_for(certificate.batch)
     else:
-        signer = activity_signer(certificate.registration.activity)
+        signer = activity_signer(certificate.source_activity)
     return pdf_filename(certificate), certificate_pdf(certificate, signer_name=signer), 'application/pdf'
 
 

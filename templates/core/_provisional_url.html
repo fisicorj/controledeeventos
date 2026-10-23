@@ -1,0 +1,6 @@
+{# Aviso antes de emitir certificados com o endereço provisório da AWS (V7-02). #}
+{% if provisional_site_url %}
+  <div class="alert alert-warning d-flex gap-2" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>
+    <strong>O site está num endereço provisório</strong>. O QR Code e o link de validação dos certificados guardam esse endereço: se ele for trocado por um domínio próprio, os certificados emitidos agora deixam de abrir pelo QR (continuam válidos no sistema). Para eventos reais, configure o domínio definitivo antes de emitir.
+  </div></div>
+{% endif %}

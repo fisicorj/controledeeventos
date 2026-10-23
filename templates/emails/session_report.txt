@@ -1,0 +1,18 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Obrigado por participar de "{{ activity.title }}". Este é o resumo da sua sessão:
+
+{{ session.title }}
+{{ session.start_at|date:'d/m/Y H:i' }} até {{ session.end_at|date:'H:i' }}
+
+Presença: {{ present_names|length }} de {{ expected }}{% if rate is not None %} ({{ rate }}%){% endif %}{% if survey.count %}
+Nota média na pesquisa: {{ survey.average }} (de 0 a 10, {{ survey.count }} nota{{ survey.count|pluralize }}){% endif %}
+{% if survey.comments %}
+Comentários dos participantes (sem identificação):
+{% for r in survey.comments %}- [{{ r.score }}] {{ r.comment }}
+{% endfor %}{% endif %}{% if present_names %}
+Quem teve presença registrada:
+{% for n in present_names %}- {{ n }}
+{% endfor %}{% endif %}
+{{ institution }}
+{% endautoescape %}

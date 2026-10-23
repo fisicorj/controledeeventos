@@ -57,6 +57,10 @@ def registrations_csv(request, pk):
             registration__activity=activity
         ).values_list('registration_id', 'code', 'revoked_at')
     }
+    chosen = {}
+    if activity.per_session:
+        chosen, session_codes = _session_choices(activity)
+        certificates = {k: '; '.join(v) for k, v in session_codes.items()}
     categories = dict(activity.categories.values_list('id', 'name'))
     order = {Registration.Status.CONFIRMED: 0, Registration.Status.WAITLISTED: 1, Registration.Status.CANCELLED: 2}
     rows.sort(key=lambda r: (order[r.registration.status], r.registration.waitlisted_at or r.registration.created_at))
@@ -85,14 +89,51 @@ def registrations_csv(request, pk):
                 _fmt(registration.created_at),
             ]
             + [answers.get((registration.id, q.id), '') for q in questions]
-            + [('P' if mark else 'F') if confirmed else '' for mark in row.marks]
+            + _marks(activity, row, sessions, chosen, confirmed)
             + [
                 row.count if confirmed else '',
-                row.percent if confirmed and sessions else '',
+                row.percent if confirmed and sessions and not activity.per_session else '',
                 certificates.get(registration.id, ''),
             ]
         )
     return response
+
+
+def _session_choices(activity):
+    """Atividade por sessão: {(inscrição, sessão): situação da escolha} e {inscrição: [códigos dos certificados]}."""
+    from registrations.models import SessionEnrollment
+
+    chosen = dict(
+        (((r, s), status) for r, s, status in SessionEnrollment.objects.filter(session__activity=activity)
+         .values_list('registration_id', 'session_id', 'status'))
+    )  # fmt: skip
+    codes = {}
+    for registration_id, code, revoked_at in Certificate.objects.filter(
+        session_enrollment__session__activity=activity
+    ).values_list('session_enrollment__registration_id', 'code', 'revoked_at'):
+        codes.setdefault(registration_id, []).append(f'{code} (revogado)' if revoked_at else code)
+    return chosen, codes
+
+
+def _marks(activity, row, sessions, chosen, confirmed):
+    """Uma coluna por sessão: P (presente) ou F (faltou); na atividade por sessão, também "espera" (fila da
+    sessão) e "-" (não escolheu a sessão)."""
+    if not confirmed:
+        return [''] * len(sessions)
+    if not activity.per_session:
+        return ['P' if mark else 'F' for mark in row.marks]
+    out = []
+    for session, mark in zip(sessions, row.marks, strict=True):
+        status = chosen.get((row.registration.id, session.id))
+        if mark:
+            out.append('P')
+        elif status == 'CONFIRMED':
+            out.append('F')
+        elif status == 'WAITLISTED':
+            out.append('espera')
+        else:
+            out.append('-')
+    return out
 
 
 # ---------- PDFs
@@ -155,6 +196,7 @@ def attendance_pdf(request, pk):
     if not can_manage(request.user, activity):
         raise PermissionDenied('Acesso restrito.')
     sessions, rows = participation(activity)
+    chosen = _session_choices(activity)[0] if activity.per_session else {}
 
     def build(buffer):
         page = landscape(A4)
@@ -166,17 +208,22 @@ def attendance_pdf(request, pk):
             f'{activity.get_activity_type_display()} · {_fmt(activity.start_date, "%d/%m/%Y")} a '
             f'{_fmt(activity.end_date, "%d/%m/%Y")} · {len(rows)} inscrito(s) · {len(sessions)} sessão(ões)'
         )
-        if activity.certificate_enabled:
+        if activity.per_session:
+            subtitle += ' · P: presente, F: escolheu e faltou, -: não escolheu · certificado por sessão'
+        elif activity.certificate_enabled:
             subtitle += f' · frequência mínima para certificado: {activity.min_attendance_percent}%'
         header = ['#', 'Participante', 'Matrícula/CPF']
-        header += [_fmt(s.start_at, '%d/%m %H:%M') for s in sessions] + ['Total', '%']
+        header += [_fmt(s.start_at, '%d/%m %H:%M') for s in sessions]
+        header += ['Presenças', 'Escolhidas'] if activity.per_session else ['Total', '%']
         data = [header]
         for i, row in enumerate(rows, 1):
-            data.append(
-                [i, row.user.get_full_name() or row.user.username, row.user.institutional_id]
-                + ['P' if m else '-' for m in row.marks]
-                + [row.count, f'{row.percent}%' if sessions else '-']
-            )
+            line = [i, row.user.get_full_name() or row.user.username, row.user.institutional_id]
+            if activity.per_session:
+                marks = _marks(activity, row, sessions, chosen, True)
+                line += marks + [marks.count('P'), sum(1 for m in marks if m in ('P', 'F'))]
+            else:
+                line += ['P' if m else '-' for m in row.marks] + [row.count, f'{row.percent}%' if sessions else '-']
+            data.append(line)
         if not rows:
             data.append(['', 'Nenhum inscrito confirmado.', ''] + [''] * len(sessions) + ['', ''])
         usable = page[0] - 2.4 * cm
@@ -201,6 +248,11 @@ def signature_pdf(request, pk):
     if not can_manage(request.user, activity):
         raise PermissionDenied('Acesso restrito.')
     _, rows = participation(activity)
+    if activity.per_session:  # só quem está confirmado nesta sessão
+        from registrations.sessions import session_registrations
+
+        allowed = set(session_registrations(session).values_list('pk', flat=True))
+        rows = [row for row in rows if row.registration.pk in allowed]
 
     def build(buffer):
         doc = SimpleDocTemplate(

@@ -58,6 +58,14 @@ def create(actor, email, role, request=None):
     return invite
 
 
+def resend(actor, invite, request=None):
+    """Manda o convite de novo (aberto ou vencido): gera outro link, com prazo novo, e o link anterior deixa de
+    valer. Por baixo, é um convite novo para o mesmo e-mail e papel."""
+    if invite.accepted_at:
+        raise user_admin.Refused('Este convite já foi aceito.')
+    return create(actor, invite.email, invite.role, request)
+
+
 def find(token):
     invite = StaffInvite.objects.filter(token_hash=_hash(token or '')).first()
     return invite if invite and invite.is_open else None

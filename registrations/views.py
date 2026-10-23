@@ -10,9 +10,9 @@ from activities.models import Activity
 from activities.operations import materials_for
 from activities.views import activity_detail
 
-from . import notifications, services
+from . import notifications, services, sessions
 from .forms import RegistrationAnswersForm, RegistrationOptionsForm
-from .models import Registration, SurveyResponse
+from .models import Registration, SessionEnrollment, SurveyResponse
 from .qr import qr_png
 
 
@@ -44,8 +44,24 @@ def register_activity(request, activity_id):
         if refused := _refuse_registration(request, activity, registration, category, full):
             return refused
         registration = _save_registration(request.user, activity, registration, category, full, form)
+        chosen, refused = [], []
+        if activity.per_session and not full:
+            chosen, refused = sessions.choose(registration, options.cleaned_data.get('sessions') or [])
         _announce_registration(request, registration, full)
+        if activity.per_session:
+            _announce_sessions(request, registration, full, chosen, refused)
     return redirect('my_registrations')
+
+
+def _announce_sessions(request, registration, full, chosen, refused):
+    if full:
+        messages.info(request, 'Quando a sua vaga no evento for confirmada, escolha as sessões em "Minhas inscrições".')
+        return
+    summary = sessions.describe(chosen, refused)
+    if summary:
+        (messages.warning if refused else messages.info)(request, summary)
+    if not chosen:
+        messages.warning(request, 'Você ainda não tem nenhuma sessão. Escolha em "Minhas inscrições".')
 
 
 def _registration_open(activity):
@@ -135,6 +151,7 @@ def cancel_registration(request, pk):
         registration.cancelled_at = timezone.now()
         registration.save(update_fields=['status', 'waitlisted_at', 'cancelled_at'])
         notifications.notify_registration_cancelled(registration, was_waitlisted=was_waitlisted)
+        sessions.cancel_all(registration)  # as vagas das sessões escolhidas vão para as filas delas
         if not was_waitlisted:
             # A vaga liberada vai para o primeiro da fila.
             services.promote_waitlist(activity)
@@ -207,7 +224,117 @@ def my_registrations(request):
             if registration.session_count
             else None
         )
+    _add_session_choices(registrations)
     return render(request, 'registrations/my_registrations.html', {'registrations': registrations})
+
+
+def _add_session_choices(registrations):
+    """Atividade por sessão: sessões escolhidas e certificados de cada inscrição, em duas consultas."""
+    from certificates.models import Certificate
+
+    per_session = {r.pk: r for r in registrations if r.activity.per_session}
+    for registration in per_session.values():
+        registration.chosen_sessions, registration.session_certificates = [], []
+    if not per_session:
+        return
+    for enrollment in (
+        SessionEnrollment.objects.filter(registration_id__in=per_session, status__in=sessions.ACTIVE)
+        .select_related('session')
+        .order_by('session__start_at')
+    ):
+        per_session[enrollment.registration_id].chosen_sessions.append(enrollment)
+    for certificate in Certificate.objects.filter(
+        session_enrollment__registration_id__in=per_session, revoked_at__isnull=True
+    ).select_related('session_enrollment'):
+        per_session[certificate.session_enrollment.registration_id].session_certificates.append(certificate)
+
+
+@login_required
+def registration_sessions(request, pk):
+    """Atividade com inscrição por sessão: escolher, trocar e sair das sessões até cada uma começar."""
+    registration = get_object_or_404(
+        Registration.objects.select_related('activity'), pk=pk, user=request.user, activity__per_session=True
+    )
+    activity = registration.activity
+    if request.method == 'POST':
+        _change_session(request, registration)
+        return redirect('registration_sessions', pk=registration.pk)
+    mine = {
+        e.session_id: e
+        for e in registration.session_enrollments.select_related('certificate').exclude(
+            status=SessionEnrollment.Status.CANCELLED, certificate__isnull=True
+        )
+    }
+    rows = sessions.with_room(activity, activity.sessions.prefetch_related('speakers'))
+    for session in rows:
+        session.mine = mine.get(session.pk)
+        if session.mine and session.mine.status == SessionEnrollment.Status.WAITLISTED:
+            session.position = session.mine.waitlist_position()
+    return render(
+        request,
+        'registrations/sessions.html',
+        {
+            'registration': registration,
+            'activity': activity,
+            'sessions': rows,
+            'can_choose': sessions.can_choose(registration),
+            'survey_blocks': _survey_blocks(registration),
+        },
+    )
+
+
+def _survey_blocks(registration):
+    from .survey import needs_survey
+
+    return registration.activity.status == Activity.Status.FINISHED and needs_survey(registration)
+
+
+def _change_session(request, registration):
+    session = registration.activity.sessions.filter(pk=request.POST.get('session')).first()
+    if session is None:
+        messages.error(request, 'Sessão não encontrada.')
+        return
+    if request.POST.get('action') == 'confirm':
+        enrollment = registration.session_enrollments.filter(session=session).first()
+        if enrollment and sessions.confirm_offer(enrollment):
+            messages.success(request, f'Vaga confirmada em "{session.title}".')
+        else:
+            messages.error(request, 'O prazo para confirmar esta vaga terminou e ela passou para a próxima pessoa.')
+        return
+    try:
+        if request.POST.get('action') == 'leave':
+            enrollment = registration.session_enrollments.filter(session=session).first()
+            if enrollment and sessions.leave(enrollment):
+                messages.success(request, f'Você saiu de "{session.title}".')
+            return
+        enrollment = sessions.enroll(registration, session)
+    except sessions.Refused as exc:
+        messages.error(request, str(exc))
+        return
+    if enrollment.status == SessionEnrollment.Status.WAITLISTED:
+        messages.info(
+            request,
+            f'"{session.title}" está lotada: você entrou na lista de espera, na posição '
+            f'{enrollment.waitlist_position()}. Se abrir uma vaga, a sua entra automaticamente e avisamos por e-mail.',
+        )
+    else:
+        messages.success(request, f'Você está confirmado em "{session.title}".')
+
+
+@login_required
+def my_calendar(request, pk):
+    """Agenda pessoal (.ics): no modo por sessão, só as sessões em que a pessoa está confirmada."""
+    registration = get_object_or_404(
+        Registration.objects.select_related('activity'),
+        pk=pk,
+        user=request.user,
+        status=Registration.Status.CONFIRMED,
+        activity__status=Activity.Status.PUBLISHED,
+    )
+    name, content = notifications.personal_ics(registration)
+    response = HttpResponse(content, content_type='text/calendar; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{name}"'
+    return response
 
 
 @login_required

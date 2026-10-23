@@ -16,7 +16,8 @@ COPY . .
 # A chave abaixo existe só para o collectstatic rodar durante o build; a real vem do .env.
 RUN SECRET_KEY=collectstatic-build-only-not-used-at-runtime-0123456789 DEBUG=False python manage.py collectstatic --noinput
 
-RUN useradd --create-home app && mkdir -p /app/media /app/private_media && chown -R app:app /app/media /app/private_media
+# UID fixo: os volumes EFS da AWS (infra/setup.sh) entregam as pastas para o UID 1000.
+RUN useradd --create-home --uid 1000 app && mkdir -p /app/media /app/private_media && chown -R app:app /app/media /app/private_media
 USER app
 
 EXPOSE 8000

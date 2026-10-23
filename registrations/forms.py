@@ -42,6 +42,22 @@ class RegistrationAnswersForm(forms.Form):
             )
 
 
+def session_label(session):
+    """Sessão com dia, horário e vagas restantes (session.remaining vem de sessions.with_room)."""
+    from django.utils import timezone
+
+    start, end = timezone.localtime(session.start_at), timezone.localtime(session.end_at)
+    text = f'{session.title} ({start:%d/%m} das {start:%H:%M} às {end:%H:%M})'
+    remaining = getattr(session, 'remaining', None)
+    if remaining is None:
+        return text
+    if remaining:
+        return f'{text} · {remaining} vaga{"s" if remaining != 1 else ""}'
+    if getattr(session, 'waitlist_enabled', True):
+        return f'{text} · lotada, entra na lista de espera'
+    return f'{text} · lotada'
+
+
 CODE_FAILS, CODE_PERIOD = 10, 3600  # códigos de acesso errados por pessoa e atividade, por hora
 
 
@@ -95,6 +111,41 @@ class RegistrationOptionsForm(forms.Form):
                 self.fields[name].widget.attrs.update(
                     {'class': 'form-control', 'autocomplete': 'off', 'autocapitalize': 'characters'}
                 )
+        self.require_sessions = False
+        if activity.per_session:
+            self._add_sessions_field(activity)
+
+    def _add_sessions_field(self, activity):
+        """Atividade com inscrição por sessão: a pessoa marca as sessões que vai assistir."""
+        from django.utils import timezone
+
+        from . import services, sessions
+
+        upcoming = activity.sessions.filter(start_at__gt=timezone.now())
+        room = {s.pk: s for s in sessions.with_room(activity, upcoming)}
+        field = forms.ModelMultipleChoiceField(
+            label='Sessões que você vai assistir',
+            queryset=upcoming,
+            widget=forms.CheckboxSelectMultiple,
+            required=False,
+            error_messages={'invalid_choice': 'Uma das sessões escolhidas não está mais disponível.'},
+        )
+        field.label_from_instance = lambda session: session_label(room.get(session.pk, session))
+        self.fields['sessions'] = field
+        # Evento lotado: a pessoa entra na fila do evento e escolhe as sessões quando a vaga for confirmada.
+        self.require_sessions = bool(room) and services.has_room(activity)
+
+    def clean_sessions(self):
+        chosen = list(self.cleaned_data.get('sessions') or [])
+        if self.require_sessions and not chosen:
+            raise forms.ValidationError('Escolha pelo menos uma sessão.')
+        chosen.sort(key=lambda s: s.start_at)
+        for first, second in zip(chosen, chosen[1:], strict=False):
+            if first.overlaps(second):
+                raise forms.ValidationError(
+                    f'"{first.title}" e "{second.title}" acontecem no mesmo horário. Escolha só uma delas.'
+                )
+        return chosen
 
     def clean(self):
         data = super().clean()

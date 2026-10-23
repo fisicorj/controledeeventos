@@ -132,7 +132,6 @@ class ReauthCoverageTests(TestCase):
         self.client.force_login(admin)
         urls = [
             reverse('certificate_correct', args=[certificate.code]),
-            reverse('site_settings'),
             reverse('batch_edit', args=[batch.pk]),
         ]
         for url in urls:
@@ -145,3 +144,20 @@ class ReauthCoverageTests(TestCase):
             self.assertTrue(post.url.startswith(reverse('reauth')), url)
         certificate.refresh_from_db()
         self.assertEqual(certificate.participant_name, 'Ana')
+
+    def test_configuracoes_da_instituicao_abrem_e_so_salvar_pede_a_senha(self):
+        # P3 da 4ª auditoria: consultar não pede a senha; salvar pede
+        from core.models import SiteSettings
+
+        admin = make_user('chefe2', User.Role.ADMIN)
+        self.client.force_login(admin)
+        url = reverse('site_settings')
+        self.assertNotContains(self.client.get(url), 'Confirmar identidade')
+        expire_reauth(self.client)
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Confirmar identidade')
+        before = SiteSettings.load(fresh=True).institution_name
+        response = self.client.post(url, {'institution_name': 'Outra'}, HTTP_REFERER=url)
+        self.assertTrue(response.url.startswith(reverse('reauth')))
+        self.assertEqual(SiteSettings.load(fresh=True).institution_name, before)

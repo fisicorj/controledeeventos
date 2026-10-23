@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if added %}A organização incluiu você na sessão "{{ session.title }}" ({{ session.start_at|date:'d/m/Y \à\s H:i' }}), de "{{ activity.title }}". A sua vaga nela está confirmada.{% else %}A organização tirou você da sessão "{{ session.title }}" ({{ session.start_at|date:'d/m/Y \à\s H:i' }}), de "{{ activity.title }}".{% endif %}
+{% if note %}
+Motivo:
+{{ note }}
+{% endif %}
+Veja as suas sessões em: {{ sessions_url }}
+
+{{ institution }}
+{% endautoescape %}

@@ -13,7 +13,7 @@ from activities.test_utils import make_user
 from .models import Certificate, CertificateBatch, HoursDeclaration
 
 
-class DeclarationVerifyTests(TestCase):
+class DeclarationSetup(TestCase):
     def setUp(self):
         org = make_user('org', User.Role.ORGANIZER)
         self.ana = make_user('ana', first_name='Ana', last_name='Lima', email_verified=True)
@@ -43,6 +43,8 @@ class DeclarationVerifyTests(TestCase):
         self.assertEqual(response['Content-Type'], 'application/pdf')
         return response, HoursDeclaration.objects.latest('created_at')
 
+
+class DeclarationVerifyTests(DeclarationSetup):
     def test_pdf_traz_codigo_e_pagina_publica_confere(self):
         response, declaration = self.download()
         self.assertEqual((declaration.total_hours, len(declaration.items)), (12, 2))
@@ -121,3 +123,37 @@ class DeclarationVerifyTests(TestCase):
         self.assertNotContains(public, self.certs[0].code)
         _, new = self.download()  # depois de cancelar, baixar de novo gera outra
         self.assertNotEqual(new.pk, declaration.pk)
+
+
+class BulkVerifyTests(DeclarationSetup):
+    """Verificação em lote (P3 da 4ª auditoria)."""
+
+    def test_varios_codigos_de_uma_vez(self):
+        from django.utils import timezone
+
+        _, declaration = self.download()
+        Certificate.objects.filter(pk=self.certs[1].pk).update(revoked_at=timezone.now())
+        typed = (
+            f'{self.certs[0].code}\n{self.certs[1].code.lower().replace("-", "")}, {declaration.code}; ZZZZ-ZZZZ-ZZZZ'
+        )
+        page = Client().post(reverse('certificate_verify_bulk'), {'codigos': typed})
+        rows = page.context['rows']
+        self.assertEqual([(r['kind'], r['valid']) for r in rows], [
+            ('Certificado', True), ('Certificado', False), ('Declaração de horas', True), (None, False),
+        ])  # fmt: skip
+        self.assertEqual(page.context['summary'], {'valid': 2, 'invalid': 1, 'missing': 1})
+        self.assertContains(page, 'Ana Lima')
+
+    def test_limite_de_codigos_e_de_inexistentes(self):
+        from unittest import mock
+
+        from . import views
+
+        too_many = '\n'.join(['ABCD-EFGH-JKMN'] * 51)
+        self.assertContains(Client().post(reverse('certificate_verify_bulk'), {'codigos': too_many}), 'no máximo 50')
+        with mock.patch.object(views, 'VERIFY_MISSES', 2):
+            page = Client().post(
+                reverse('certificate_verify_bulk'), {'codigos': 'AAAA-AAAA-AAAA BBBB-BBBB-BBBB ' + self.certs[0].code}
+            )
+        self.assertTrue(page.context['throttled'])
+        self.assertEqual(len(page.context['rows']), 2)  # o terceiro não foi conferido

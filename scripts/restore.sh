@@ -50,7 +50,8 @@ decrypt() {  # devolve o caminho do arquivo pronto para usar
   local file=$1
   if [ "${file%.age}" = "$file" ]; then echo "$file"; return; fi
   : "${BACKUP_AGE_IDENTITY:?Informe a chave privada do age em BACKUP_AGE_IDENTITY para abrir $file}"
-  local out="$WORK/$(basename "${file%.age}")"
+  local out
+  out="$WORK/$(basename "${file%.age}")"
   age -d -i "$BACKUP_AGE_IDENTITY" -o "$out" "$file"
   echo "$out"
 }

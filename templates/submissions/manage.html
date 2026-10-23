@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Chamada de trabalhos | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs">{% if is_organizer %}<a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a>{% else %}<a href="{% url 'my_reviews' %}">Avaliações</a> / {{ activity.title }}{% endif %}</div>
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+      <div>
+        <h1>Chamada de trabalhos</h1>
+        <p class="m-0">Submissões de {{ call.opens_at|date:'d/m/Y H:i' }} até {{ call.closes_at|date:'d/m/Y H:i' }} · avaliação {% if call.blind_review %}às cegas{% else %}aberta{% endif %}{% if activity.status != 'PUBLISHED' %} · <span class="text-danger">a chamada aparece quando a atividade for publicada</span>{% endif %}</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="{% url 'call_page' activity.slug %}" target="_blank"><i class="bi bi-eye"></i>Página da chamada</a>
+        <a class="btn btn-outline-secondary" href="{% url 'submissions_csv' activity.id %}"><i class="bi bi-filetype-csv"></i>CSV</a>
+        <a class="btn btn-primary" href="{% url 'call_edit' activity.id %}"><i class="bi bi-pencil"></i>Editar chamada</a>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="d-flex gap-2 flex-wrap mb-3">
+        <a class="btn btn-sm {% if not status %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?">Todos</a>
+        {% for value, label, n in statuses %}{% if n %}<a class="btn btn-sm {% if status == value %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?situacao={{ value }}">{{ label }} ({{ n }})</a>{% endif %}{% endfor %}
+      </div>
+      <section class="panel">
+        {% for s in submissions %}
+          <div class="list-row">
+            <div>
+              <a class="fw-semibold" href="{% url 'submission_manage' s.pk %}">{{ s.title }}</a>
+              <div class="small text-secondary">{{ s.author.get_full_name|default:s.author.username }}{% if s.area %} · {{ s.area }}{% endif %} · v{{ s.version }} · {{ s.done }}/{{ s.assigned }} avaliaç{{ s.assigned|pluralize:"ão,ões" }}{% if s.average %} · nota {{ s.average|floatformat:1 }}{% endif %}{% if s.session %} · {{ s.session.title }}{% endif %}</div>
+            </div>
+            <div>{% include 'submissions/_status.html' %}</div>
+          </div>
+        {% empty %}
+          <div class="empty">Nenhum trabalho{% if status %} nesta situação{% else %} enviado ainda{% endif %}.</div>
+        {% endfor %}
+      </section>
+    </div>
+    <div class="col-lg-4">
+      <section class="panel">
+        <div class="panel-head"><div><h2>Avaliadores</h2><p>Precisam ter conta no portal. Veem só os trabalhos designados a eles{% if call.blind_review %}, sem os autores{% endif %}. Prazo de {{ call.review_days }} dia{{ call.review_days|pluralize }} por avaliação, com lembrete automático.{% if overdue_total %} <strong class="text-danger">{{ overdue_total }} avaliação(ões) atrasada(s).</strong>{% endif %}</p></div></div>
+        {% for person in reviewers %}
+          <div class="list-row flex-wrap">
+            <div>
+              <strong>{{ person.get_full_name|default:person.username }}</strong>
+              <div class="small text-secondary">{{ person.load }} trabalho{{ person.load|pluralize }}{% if person.pending %} · {{ person.pending }} pendente{{ person.pending|pluralize }}{% endif %}{% if person.overdue %} · <span class="text-danger">{{ person.overdue }} atrasada{{ person.overdue|pluralize }}</span>{% endif %}{% if call_areas %} · {% if person.areas %}{{ person.areas|join:', ' }}{% else %}todas as áreas{% endif %}{% endif %}</div>
+            </div>
+            <div class="d-flex gap-1 flex-wrap">
+              {% if person.pending %}<form method="post" action="{% url 'reviewer_remind' activity.id person.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary" title="Envia agora um e-mail com as avaliações pendentes">Lembrar</button></form>{% endif %}
+              <form method="post" action="{% url 'reviewer_remove' activity.id person.id %}" data-confirm="Tirar {{ person.get_full_name|default:person.username }} dos avaliadores? As avaliações pendentes dele saem; as entregues ficam." data-confirm-label="Remover" data-confirm-danger>{% csrf_token %}<button class="btn btn-sm btn-outline-secondary text-danger">Remover</button></form>
+            </div>
+            {% if call_areas %}
+              <details class="w-100 small mt-1">
+                <summary>Áreas que avalia</summary>
+                <form method="post" action="{% url 'reviewer_set_areas' activity.id person.id %}" class="mt-1">
+                  {% csrf_token %}
+                  {% for area in call_areas %}
+                    <div class="form-check"><input class="form-check-input" type="checkbox" name="areas" value="{{ area }}" id="area-{{ person.id }}-{{ forloop.counter }}"{% if area in person.areas %} checked{% endif %}><label class="form-check-label" for="area-{{ person.id }}-{{ forloop.counter }}">{{ area }}</label></div>
+                  {% endfor %}
+                  <div class="form-text">Nenhuma marcada: avalia todas.</div>
+                  <button class="btn btn-sm btn-outline-primary mt-1">Salvar áreas</button>
+                </form>
+              </details>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="empty small">Nenhum avaliador ainda.</div>
+        {% endfor %}
+        {% for invite in invites %}
+          <div class="list-row">
+            <div><span class="small">{{ invite.email }}</span><div class="small text-secondary">Convite enviado em {{ invite.created_at|date:'d/m' }}, vale até {{ invite.expires_at|date:'d/m' }}</div></div>
+            <div class="d-flex gap-1">
+              <form method="post" action="{% url 'reviewer_invite_resend' activity.id invite.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Reenviar</button></form>
+              <form method="post" action="{% url 'reviewer_invite_cancel' activity.id invite.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary text-danger">Cancelar</button></form>
+            </div>
+          </div>
+        {% endfor %}
+        <form method="post" action="{% url 'reviewer_add' activity.id %}" class="panel-body d-flex gap-2 flex-wrap">
+          {% csrf_token %}
+          <label class="visually-hidden" for="reviewer-person">Usuário ou e-mail</label>
+          <input id="reviewer-person" name="person" class="form-control" placeholder="Usuário de acesso ou e-mail" autocomplete="off" aria-describedby="reviewer-person-help">
+          <button class="btn btn-outline-primary"><i class="bi bi-person-plus"></i>Adicionar</button>
+          <div class="form-text w-100" id="reviewer-person-help">Sem conta no portal? Informe o e-mail: a pessoa recebe um convite para criar a conta e entrar como avaliadora.</div>
+        </form>
+        {% if other_calls %}
+          <form method="post" action="{% url 'reviewers_copy' activity.id %}" class="panel-body border-top d-flex gap-2 flex-wrap align-items-end">
+            {% csrf_token %}
+            <div class="flex-grow-1"><label class="form-label small" for="copy-source">Trazer avaliadores de outra chamada</label>
+              <select id="copy-source" name="source" class="form-select">{% for c in other_calls %}<option value="{{ c.pk }}">{{ c.activity.title }} ({{ c.activity.start_date|date:'m/Y' }})</option>{% endfor %}</select></div>
+            <button class="btn btn-outline-primary">Trazer</button>
+          </form>
+        {% endif %}
+      </section>
+      <section class="panel mt-3">
+        <div class="panel-head"><div><h2>Coordenação da chamada</h2><p>Cuidam desta chamada (avaliadores, distribuição e decisões), sem acesso às inscrições do evento, e entram com verificação em duas etapas.{% if not is_organizer %} Quem inclui e tira é a organização do evento.{% endif %}</p></div></div>
+        {% for person in coordinators %}
+          <div class="list-row">
+            <strong>{{ person.get_full_name|default:person.username }}</strong>
+            {% if is_organizer %}<form method="post" action="{% url 'coordinator_remove' activity.id person.id %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary text-danger">Remover</button></form>{% endif %}
+          </div>
+        {% empty %}
+          <div class="empty small">Só a organização do evento.</div>
+        {% endfor %}
+        {% if is_organizer %}
+          <form method="post" action="{% url 'coordinator_add' activity.id %}" class="panel-body d-flex gap-2 flex-wrap">
+            {% csrf_token %}
+            <label class="visually-hidden" for="coordinator-person">Usuário ou e-mail</label>
+            <input id="coordinator-person" name="person" class="form-control" placeholder="Usuário de acesso ou e-mail" autocomplete="off">
+            <button class="btn btn-outline-primary"><i class="bi bi-person-plus"></i>Incluir</button>
+          </form>
+        {% endif %}
+      </section>
+      {% if reviewers and waiting %}
+        <section class="panel mt-3">
+          <div class="panel-head"><div><h2>Distribuir automaticamente</h2><p>{{ waiting }} trabalho{{ waiting|pluralize }} esperando avaliação. Cada um recebe avaliadores da área dele{% if not call_areas %} (sem áreas na chamada, qualquer avaliador){% endif %}, sem o autor nem nomes que aparecem entre os coautores, começando por quem tem menos trabalhos. Quem já está designado continua; depois dá para ajustar na tela de cada trabalho.</p></div></div>
+          <form method="post" action="{% url 'call_auto_assign' activity.id %}" class="panel-body d-flex gap-2 align-items-end flex-wrap" data-confirm="Designar avaliadores para os trabalhos que ainda não têm o número pedido? Cada avaliador novo recebe um e-mail." data-confirm-label="Distribuir">
+            {% csrf_token %}
+            <div><label class="form-label small" for="per-submission">Avaliadores por trabalho</label><input id="per-submission" name="per_submission" type="number" min="1" max="5" value="2" class="form-control" style="max-width:7rem"></div>
+            <button class="btn btn-primary"><i class="bi bi-shuffle"></i>Distribuir</button>
+          </form>
+        </section>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

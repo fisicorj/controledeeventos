@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Números do semestre | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <div class="crumbs"><a href="{% url 'organizer_dashboard' %}">Painel do organizador</a></div>
+      <h1>Números do semestre {{ period_label }}</h1>
+      <p>{% if all_activities %}Todas as atividades da instituição{% else %}As suas atividades{% endif %} com início no semestre (rascunhos ficam de fora).</p>
+    </div>
+    <form method="get" class="d-flex gap-2 align-items-end flex-wrap">
+      <div>
+        <label class="form-label" for="f-semestre">Semestre</label>
+        <select class="form-select" id="f-semestre" name="semestre">
+          {% for value, text in periods %}<option value="{{ value }}"{% if value == period %} selected{% endif %}>{{ text }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-outline-primary">Ver</button>
+      <a class="btn btn-outline-secondary" href="?semestre={{ period }}&amp;formato=csv"><i class="bi bi-download"></i>CSV</a>
+    </form>
+  </div>
+
+  <div class="kpi-grid mb-4">
+    <div class="kpi"><span class="kpi-value">{{ totals.activities }}</span><span class="kpi-label">atividades</span>{% if totals.cancelled %}<span class="kpi-sub">+ {{ totals.cancelled }} cancelada{{ totals.cancelled|pluralize }}</span>{% endif %}</div>
+    <div class="kpi"><span class="kpi-value">{{ totals.confirmed }}</span><span class="kpi-label">inscrições confirmadas</span><span class="kpi-sub">{{ totals.people }} pessoa{{ totals.people|pluralize }} diferente{{ totals.people|pluralize }}</span></div>
+    <div class="kpi"><span class="kpi-value">{% if totals.attendance_rate is not None %}{{ totals.attendance_rate }}%{% else %}-{% endif %}</span><span class="kpi-label">comparecimento médio</span><span class="kpi-sub">inscritos que vieram pelo menos uma vez, nas atividades já iniciadas</span></div>
+    <div class="kpi"><span class="kpi-value">{{ totals.hours }}</span><span class="kpi-label">horas certificadas</span><span class="kpi-sub">{{ totals.certificates }} certificado{{ totals.certificates|pluralize }} válido{{ totals.certificates|pluralize }}</span></div>
+    <div class="kpi"><span class="kpi-value">{% if totals.survey_avg is not None %}{{ totals.survey_avg }}{% else %}-{% endif %}</span><span class="kpi-label">nota média na pesquisa</span><span class="kpi-sub">{% if totals.survey_count %}{{ totals.survey_count }} resposta{{ totals.survey_count|pluralize }} · NPS {{ totals.nps }}{% else %}sem respostas{% endif %}</span></div>
+  </div>
+
+  {% if by_type %}
+    <section class="panel mb-4" aria-labelledby="by-type">
+      <div class="panel-head"><div><h2 id="by-type">Por tipo de atividade</h2></div></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th scope="col">Tipo</th><th scope="col" class="text-end">Atividades</th><th scope="col" class="text-end">Inscrições</th><th scope="col" class="text-end">Horas certificadas</th></tr></thead>
+          <tbody>{% for t in by_type %}<tr><th scope="row" class="fw-normal">{{ t.label }}</th><td class="text-end">{{ t.activities }}</td><td class="text-end">{{ t.confirmed }}</td><td class="text-end">{{ t.hours }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="panel mb-4" aria-labelledby="by-activity">
+    <div class="panel-head"><div><h2 id="by-activity">Atividade por atividade</h2><p>Comparecimento: quem veio pelo menos uma vez, sobre os confirmados. Horas: soma da carga dos certificados válidos (participação, palestrante e apresentação).</p></div></div>
+    {% if rows %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th scope="col">Atividade</th><th scope="col">Início</th><th scope="col" class="text-end">Confirmados</th><th scope="col" class="text-end">Comparecimento</th><th scope="col" class="text-end">Certificados</th><th scope="col" class="text-end">Horas</th><th scope="col" class="text-end">Pesquisa</th></tr></thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td><a href="{% url 'activity_stats' row.activity.id %}">{{ row.activity.title }}</a>
+                  <div class="small text-secondary">{{ row.activity.get_activity_type_display }}{% if all_activities %} · {{ row.activity.organizer.get_full_name|default:row.activity.organizer.username }}{% endif %}{% if row.activity.status == 'CANCELLED' %} · <span class="pill pill-muted">Cancelada</span>{% endif %}</div></td>
+                <td class="text-nowrap">{{ row.activity.start_date|date:'d/m/Y' }}</td>
+                <td class="text-end">{{ row.confirmed }}</td>
+                <td class="text-end">{% if row.attendance_rate is not None %}{{ row.attendance_rate }}%{% else %}<span class="text-secondary">-</span>{% endif %}</td>
+                <td class="text-end">{{ row.certificates }}</td>
+                <td class="text-end">{{ row.hours }}</td>
+                <td class="text-end">{% if row.survey_avg is not None %}{{ row.survey_avg }} <span class="text-secondary small">({{ row.survey_count }})</span>{% else %}<span class="text-secondary">-</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="panel-body text-secondary mb-0">Nenhuma atividade com início neste semestre.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

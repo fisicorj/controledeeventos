@@ -27,10 +27,30 @@ class ConfiguredSMTPBackend(SMTPBackend):
         return context
 
 
+class HeadersOnlyBackend(BaseEmailBackend):
+    """Envio desligado em produção: registra no log só para quem e qual o assunto, nunca o corpo. O corpo pode ter
+    códigos de confirmação e links de troca de senha, e o log costuma ser lido por mais gente (e guardado por mais
+    tempo) que a caixa de e-mail de cada pessoa. Para ver o corpo (primeiro acesso, testes), EMAIL_LOG_BODY=True."""
+
+    def send_messages(self, email_messages):
+        import logging
+
+        log = logging.getLogger('core.mail')
+        for message in email_messages:
+            log.warning(
+                'E-mail não enviado (envio desligado em Configurações > E-mail): para %s, assunto "%s".',
+                ', '.join(message.to),
+                message.subject,
+            )
+        return len(email_messages)
+
+
 def build_backend(config, fail_silently=False):
     """Cria o backend real a partir de uma EmailSettings."""
     if not config.enabled:
-        return ConsoleBackend(fail_silently=fail_silently)
+        if settings.EMAIL_LOG_BODY:
+            return ConsoleBackend(fail_silently=fail_silently)
+        return HeadersOnlyBackend(fail_silently=fail_silently)
     Security = config.Security
     return ConfiguredSMTPBackend(
         host=config.host,

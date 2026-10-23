@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from accounts.reauth import require_recent_auth
+from accounts.reauth import require_recent_auth, require_recent_auth_to_save
 from certificates.models import Certificate
 from certificates.pdf import certificate_pdf
 
@@ -31,7 +31,7 @@ def privacy(request):
 
 
 @login_required
-@require_recent_auth
+@require_recent_auth_to_save
 def settings_edit(request):
     if not is_platform_admin(request.user):
         raise PermissionDenied('Acesso restrito a administradores.')
@@ -42,7 +42,9 @@ def settings_edit(request):
         messages.success(request, 'Configurações salvas.')
         return redirect('site_settings')
     # 'portal' vem do context processor (versão salva), não do objeto alterado por um formulário inválido.
-    return render(request, 'core/settings.html', {'form': form})
+    from accounts.reauth import is_recent
+
+    return render(request, 'core/settings.html', {'form': form, 'needs_reauth': not is_recent(request)})
 
 
 @login_required

@@ -38,7 +38,7 @@
             <tbody>
               {% for c in items %}
                 <tr>
-                  <td><span class="fw-semibold">{{ c.activity_title }}</span><div class="small text-secondary">{{ c.activity_type }} · código <a class="tabular" href="{% url 'certificate_verify_code' c.code %}">{{ c.code }}</a>{% if c.claimed_by_id == user.id %} · vinculado por você{% endif %}</div></td>
+                  <td><span class="fw-semibold">{{ c.full_title }}</span><div class="small text-secondary">{{ c.activity_type }} · código <a class="tabular" href="{% url 'certificate_verify_code' c.code %}">{{ c.code }}</a>{% if c.claimed_by_id == user.id %} · vinculado por você{% endif %}</div></td>
                   <td class="tabular text-nowrap">{{ c.certificate_date|date:'d/m/Y' }}</td>
                   <td class="tabular text-end">{% if c.workload_hours %}{{ c.workload_hours }} h{% else %}<span class="text-secondary" title="Certificado sem carga horária">-</span>{% endif %}</td>
                   <td class="text-end text-nowrap">

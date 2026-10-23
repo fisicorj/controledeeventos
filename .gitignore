@@ -22,6 +22,9 @@ staticfiles/
 *.sqlite3
 *.log
 
+# Certificado de CA do RDS baixado pelo infra/setup.sh (vai para a imagem; é público)
+certs/
+
 # Backups e exportações locais
 *.dump
 *.sql

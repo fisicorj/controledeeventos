@@ -87,6 +87,12 @@ def purge_invites():
     return purge_old()
 
 
+def purge_reviewer_invites():
+    from submissions.invites import purge_old
+
+    return purge_old()
+
+
 def clean_zip_exports():
     from certificates import zips
 
@@ -108,6 +114,7 @@ TASKS = [
     ('E-mails antigos com o conteúdo apagado', redact_emails),
     ('ZIPs de certificados vencidos apagados', clean_zip_exports),
     ('Convites de equipe antigos apagados', purge_invites),
+    ('Convites de avaliador antigos apagados', purge_reviewer_invites),
     ('Registros de auditoria exportados', export_audit),
 ]
 

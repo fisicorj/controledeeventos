@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Incluir em lote | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:960px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <h1>Incluir participantes em lote</h1>
+    <p>Para turmas inteiras e cursos fechados. Cada pessoa precisa ter conta no portal com o e-mail confirmado. Elas são inscritas na hora, mesmo acima das vagas, e cada uma recebe o QR Code por e-mail.</p>
+  </div>
+
+  {% if rows %}
+    <section class="panel mb-4" aria-labelledby="preview-title">
+      <div class="panel-head"><div><h2 id="preview-title">Confira antes de inscrever</h2>
+        <p>{{ to_add|length }} de {{ rows|length }} linha{{ rows|length|pluralize }} {% if to_add|length == 1 %}vai{% else %}vão{% endif %} ser inscrita{{ to_add|length|pluralize }}{% if category %}, como {{ category.name }}{% endif %}. Vagas livres agora: {{ free }}.</p>
+      </div></div>
+      {% if over %}<div class="alert alert-warning small mx-3" role="status">{{ over }} pessoa{{ over|pluralize }} ficar{{ over|pluralize:"á,ão" }} acima das vagas da atividade.</div>{% endif %}
+      <div class="table-responsive" tabindex="0" role="region" aria-labelledby="preview-title">
+        <table class="table align-middle mb-0">
+          <caption class="visually-hidden">Resultado de cada linha da lista</caption>
+          <thead><tr><th scope="col">Linha</th><th scope="col">Conta</th><th scope="col">Situação</th></tr></thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>{{ row.typed }}</td>
+                <td>{% if row.user %}{{ row.user.get_full_name|default:row.user.username }} <span class="text-secondary small">{{ row.user.email }}</span>{% else %}<span class="text-secondary">-</span>{% endif %}</td>
+                <td><span class="pill {% if row.status == 'add' %}pill-open{% elif row.status == 'already' or row.status == 'repeated' %}pill-muted{% else %}pill-wait{% endif %}">{{ row.label }}</span></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-body d-flex gap-2 flex-wrap border-top">
+        {% if to_add %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="people" value="{{ add_list }}">
+            <input type="hidden" name="category" value="{{ category.id|default:'' }}">
+            <input type="hidden" name="note" value="{{ note }}">
+            <input type="hidden" name="confirm" value="1">
+            <button class="btn btn-primary"><i class="bi bi-person-plus"></i>Inscrever {{ to_add|length }} pessoa{{ to_add|length|pluralize }}</button>
+          </form>
+        {% endif %}
+        <a class="btn btn-outline-secondary" href="{% url 'participant_batch' activity.id %}">Começar de novo</a>
+      </div>
+      <p class="small text-secondary px-3 pb-3 mb-0">Quem não tem conta ou não confirmou o e-mail precisa entrar no portal antes. "E-mail não confirmado": a pessoa entra e digita o código que recebeu (ou pede um novo).</p>
+    </section>
+  {% else %}
+    <form method="post" enctype="multipart/form-data" class="panel panel-body" novalidate>
+      {% csrf_token %}
+      {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+      <div class="mb-3">
+        <label class="form-label" for="people">Usuários ou e-mails, um por linha</label>
+        <textarea class="form-control" id="people" name="people" rows="10" aria-describedby="people-help" autocomplete="off">{{ people }}</textarea>
+        <div class="form-text" id="people-help">Até {{ max_rows }} pessoas. Pode colar uma coluna de uma planilha.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="file">Ou um arquivo CSV</label>
+        <input class="form-control" type="file" id="file" name="file" accept=".csv,text/csv,text/plain" aria-describedby="file-help">
+        <div class="form-text" id="file-help">Com uma coluna "email" ou "usuario" no cabeçalho; sem cabeçalho, vale a primeira coluna. Vírgula, ponto e vírgula ou tabulação.</div>
+      </div>
+      {% if categories %}
+        <div class="mb-3">
+          <label class="form-label" for="category">Tipo de vaga</label>
+          <select class="form-select" id="category" name="category" required>
+            <option value="">Escolha...</option>
+            {% for c in categories %}<option value="{{ c.id }}"{% if category.id == c.id %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+      {% endif %}
+      <div class="mb-3">
+        <label class="form-label" for="note">Observação (opcional)</label>
+        <input class="form-control" id="note" name="note" maxlength="1000" value="{{ note }}" aria-describedby="note-help">
+        <div class="form-text" id="note-help">Fica no histórico de cada inscrição, por exemplo "Turma 3B, ADS".</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary px-4">Conferir a lista</button>
+        <a class="btn btn-outline-secondary" href="{% url 'activity_manage' activity.id %}">Cancelar</a>
+      </div>
+    </form>
+  {% endif %}
+</main>
+{% endblock %}

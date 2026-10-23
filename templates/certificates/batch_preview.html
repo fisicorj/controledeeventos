@@ -73,6 +73,7 @@
     </div>
   </section>
 
+  {% include 'core/_provisional_url.html' %}
   <form method="post" class="d-flex gap-2 justify-content-end flex-wrap">
     {% csrf_token %}
     <input type="hidden" name="token" value="{{ data.token }}">

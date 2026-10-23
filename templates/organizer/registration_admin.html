@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Inscrição de {{ registration.user.get_full_name|default:registration.user.username }} | {{ activity.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:960px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <div class="d-flex gap-2 align-items-center flex-wrap mb-1">
+      <span class="pill {% if registration.status == 'CONFIRMED' %}pill-open{% elif registration.status == 'WAITLISTED' %}pill-wait{% else %}pill-muted{% endif %}">{{ registration.get_status_display }}</span>
+      {% if registration.offer_pending %}<span class="pill pill-wait">Vaga oferecida, confirmar até {{ registration.offer_expires_at|date:'d/m H:i' }}</span>{% endif %}
+      {% if registration.category %}<span class="pill pill-muted">{{ registration.category.name }}</span>{% endif %}
+    </div>
+    <h1>{{ registration.user.get_full_name|default:registration.user.username }}</h1>
+    <p>{{ registration.user.email }}{% if registration.user.institutional_id %} · {{ registration.user.institutional_id }}{% endif %} · inscrito em {{ registration.created_at|date:'d/m/Y H:i' }}{% if registration.cancelled_at %} · cancelada em {{ registration.cancelled_at|date:'d/m/Y H:i' }}{% endif %}</p>
+  </div>
+
+  {% if activity.per_session and registration.status == 'CONFIRMED' %}
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Sessões</h2><p>A organização pode colocar a pessoa numa sessão lotada ou já começada (quem chegou na hora). Cada mudança vai por e-mail à pessoa e fica no histórico.</p></div></div>
+      {% for s in sessions %}
+        <div class="list-row">
+          <div>
+            <strong>{{ s.title }}</strong>
+            {% if s.mine.offer_pending %}<span class="pill pill-wait ms-1">Vaga oferecida</span>{% elif s.mine.status == 'CONFIRMED' %}<span class="pill pill-open ms-1">Confirmada</span>{% elif s.mine.status == 'WAITLISTED' %}<span class="pill pill-wait ms-1">Na fila</span>{% endif %}
+            <div class="small text-secondary">{{ s.start_at|date:'d/m H:i' }} até {{ s.end_at|date:'H:i' }} · {% if s.capacity is None %}sem limite{% else %}{{ s.taken }} de {{ s.capacity }} vagas{% endif %}</div>
+          </div>
+          <form method="post" class="d-flex gap-2 align-items-center">
+            {% csrf_token %}
+            <input type="hidden" name="session" value="{{ s.id }}">
+            {% if s.mine and s.mine.status != 'CANCELLED' %}
+              <input type="hidden" name="action" value="remove_session">
+              {% if s.mine.status == 'WAITLISTED' or s.mine.offer_pending %}<button class="btn btn-sm btn-outline-primary" name="action" value="add_session">Confirmar</button>{% endif %}
+              <button class="btn btn-sm btn-outline-secondary text-danger">Tirar</button>
+            {% else %}
+              <input type="hidden" name="action" value="add_session">
+              <button class="btn btn-sm btn-outline-primary">{% if s.remaining == 0 %}Colocar (acima das vagas){% else %}Colocar{% endif %}</button>
+            {% endif %}
+          </form>
+        </div>
+      {% empty %}
+        <div class="empty">Nenhuma sessão cadastrada.</div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if registration.status != 'CANCELLED' %}
+    <section class="panel mb-4">
+      <div class="panel-head"><div><h2>Cancelar a inscrição</h2><p>{% if has_certificates %}A pessoa já tem certificado desta atividade: revogue o certificado antes de cancelar.{% else %}A pessoa sai das sessões que ainda não começaram, a vaga vai para a lista de espera e ela recebe o motivo por e-mail.{% endif %}</p></div></div>
+      {% if not has_certificates %}
+        <form method="post" class="panel-body" data-confirm="Cancelar a inscrição de {{ registration.user.get_full_name|default:registration.user.username }}?" data-confirm-label="Cancelar inscrição" data-confirm-danger>
+          {% csrf_token %}<input type="hidden" name="action" value="cancel">
+          <label class="form-label" for="cancel-note">Motivo <span class="text-danger" aria-hidden="true">*</span></label>
+          <textarea id="cancel-note" name="note" class="form-control" rows="3" maxlength="1000" required></textarea>
+          <button class="btn btn-outline-secondary text-danger mt-3">Cancelar inscrição</button>
+        </form>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-head"><h2>Histórico das ações da organização</h2></div>
+    {% for log in logs %}
+      <div class="panel-body border-bottom small">
+        <strong>{{ log.get_action_display }}</strong>{% if log.session_title %}: {{ log.session_title }}{% endif %} · {{ log.created_at|date:'d/m/Y H:i' }}{% if log.actor %} · {{ log.actor.get_full_name|default:log.actor.username }}{% endif %}
+        {% if log.note %}<div class="mt-1">{{ log.note|linebreaksbr }}</div>{% endif %}
+      </div>
+    {% empty %}
+      <div class="empty small">Nenhuma ação da organização nesta inscrição.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

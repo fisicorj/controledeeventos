@@ -15,6 +15,7 @@ urlpatterns = [
     path('usuarios/usuarios.csv', users.user_list_csv, name='user_admin_csv'),
     path('usuarios/convites/', users.invite_list, name='user_admin_invites'),
     path('usuarios/convites/<int:pk>/cancelar/', users.invite_cancel, name='user_admin_invite_cancel'),
+    path('usuarios/convites/<int:pk>/reenviar/', users.invite_resend, name='user_admin_invite_resend'),
     path('usuarios/<int:pk>/', users.user_detail, name='user_admin_detail'),
     path('usuarios/<int:pk>/transferir/', users.user_transfer, name='user_admin_transfer'),
     path('usuarios/<int:pk>/papel/', users.user_role, name='user_admin_role'),

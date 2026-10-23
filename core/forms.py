@@ -1,5 +1,6 @@
 from django import forms
 
+from .images import setup_image_fields
 from .models import EmailSettings, SiteSettings
 
 
@@ -22,6 +23,7 @@ class SiteSettingsForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs['class'] = 'form-control'
+        setup_image_fields(self)
 
 
 def _clean_domains(value):

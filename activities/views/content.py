@@ -7,13 +7,44 @@ from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from core.permissions import can_manage
-from registrations import services
+from registrations import notifications, services, sessions
 from registrations.models import Registration
 
 from ..forms import CategoryForm, QuestionForm, SessionForm, SpeakerForm
 from ..models import Activity, RegistrationQuestion, Session, Speaker, SpotCategory
+
+
+def session_certificates(session):
+    from certificates.models import Certificate
+
+    return Certificate.objects.filter(session_enrollment__session=session)
+
+
+SESSION_NOTIFY_FIELDS = ('start_at', 'end_at', 'location')
+
+
+def _announce_session_change(session, changes):
+    """Horário ou local de uma sessão futura mudou: avisa quem vai a ela. Devolve quantos foram avisados."""
+    if not changes or session.end_at <= timezone.now():
+        return 0
+    if session.activity.per_session:
+        people = [
+            e.registration
+            for e in session.enrollments.filter(status__in=sessions.ACTIVE).select_related(
+                'registration__user', 'registration__activity'
+            )
+        ]
+    else:
+        people = list(
+            session.activity.registrations.filter(
+                status__in=[Registration.Status.CONFIRMED, Registration.Status.WAITLISTED]
+            ).select_related('user', 'activity')
+        )
+    notifications.notify_session_changed(session, people, changes)
+    return len(people)
 
 
 @login_required
@@ -36,10 +67,33 @@ def session_edit(request, pk):
     session = get_object_or_404(Session.objects.select_related('activity'), pk=pk)
     if not can_manage(request.user, session.activity):
         raise PermissionDenied('Acesso restrito.')
+    before = {field: getattr(session, field) for field in SESSION_NOTIFY_FIELDS}
     form = SessionForm(request.POST or None, instance=session)
     if form.is_valid():
-        form.save()
+        with transaction.atomic():
+            services.lock_activity(session.activity_id)
+            form.save()
+            # Mais vagas na sessão: a fila dela é chamada na hora.
+            promoted = sessions.promote(session) if session.activity.per_session else []
+            changes = [
+                (f, before[f], getattr(session, f)) for f in SESSION_NOTIFY_FIELDS if before[f] != getattr(session, f)
+            ]
+            notified = _announce_session_change(session, changes) if form.cleaned_data.get('notify_change') else 0
+            if any(field == 'start_at' for field, _, _ in changes):
+                session.enrollments.update(reminder_sent_at=None)  # o lembrete vale para o horário novo
         messages.success(request, 'Sessão atualizada.')
+        if notified:
+            messages.info(request, f'{notified} pessoa(s) avisada(s) da mudança por e-mail.')
+        if changes and session.activity.per_session:
+            clashes = sessions.clashes(session)
+            if clashes:
+                messages.warning(
+                    request,
+                    f'{clashes} participante(s) desta sessão agora têm outra sessão escolhida no mesmo horário. '
+                    'Eles podem trocar em "Minhas inscrições"; avise-os, se for o caso.',
+                )
+        if promoted:
+            messages.info(request, f'{len(promoted)} pessoa(s) da lista de espera da sessão foram confirmadas.')
         return redirect('activity_manage', pk=session.activity_id)
     return render(
         request,
@@ -58,18 +112,35 @@ def session_delete(request, pk):
     session = get_object_or_404(Session.objects.select_related('activity'), pk=pk)
     if not can_manage(request.user, session.activity):
         raise PermissionDenied('Acesso restrito.')
+    if session_certificates(session).exists():
+        messages.error(
+            request,
+            'Esta sessão já tem certificados emitidos e não pode ser excluída. Se precisar, revogue os certificados.',
+        )
+        return redirect('activity_manage', pk=session.activity_id)
+    chosen = session.enrollments.filter(status__in=sessions.ACTIVE)
     if request.method == 'POST':
         activity_id = session.activity_id
-        session.delete()
+        with transaction.atomic():
+            services.lock_activity(activity_id)
+            people = [e.registration for e in chosen.select_related('registration__user', 'registration__activity')]
+            if session.start_at > timezone.now():
+                notifications.notify_session_removed(session, people)
+            session.delete()
         messages.success(request, 'Sessão excluída.')
+        if people and session.start_at > timezone.now():
+            messages.info(request, f'{len(people)} participante(s) que tinham escolhido a sessão foram avisados.')
         return redirect('activity_manage', pk=activity_id)
+    warning = 'As presenças registradas nesta sessão também serão excluídas.'
+    if count := chosen.count():
+        warning += f' {count} participante(s) escolheram esta sessão e serão avisados por e-mail.'
     return render(
         request,
         'organizer/confirm_delete.html',
         {
             'object': session,
             'heading': 'Excluir sessão',
-            'warning': 'As presenças registradas nesta sessão também serão excluídas.',
+            'warning': warning,
             'cancel_url': reverse('activity_manage', args=[session.activity_id]),
         },
     )
@@ -167,6 +238,13 @@ def speaker_delete(request, pk):
     speaker = get_object_or_404(Speaker.objects.select_related('activity'), pk=pk)
     if not can_manage(request.user, speaker.activity):
         raise PermissionDenied('Acesso restrito.')
+    if hasattr(speaker, 'certificate'):
+        messages.error(
+            request,
+            f'{speaker.name} já tem certificado de palestrante ({speaker.certificate.code}) e não pode ser removido. '
+            'Se precisar, revogue o certificado.',
+        )
+        return redirect('activity_manage', pk=speaker.activity_id)
     if request.method == 'POST':
         speaker.delete()
         messages.success(request, 'Palestrante removido.')

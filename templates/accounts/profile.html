@@ -25,7 +25,7 @@
   {% if mfa_applies %}
     <section class="panel panel-body mt-4">
       <h2 class="h5">Verificação em duas etapas</h2>
-      <p class="small text-secondary mb-2">{% if mfa_active %}<span class="pill pill-open">ativa</span> O acesso pede o código do aplicativo autenticador além da senha.{% else %}<span class="pill pill-wait">desativada</span> Proteja a conta de administração ou organização com um código do celular, além da senha.{% endif %}</p>
+      <p class="small text-secondary mb-2">{% if mfa_active %}<span class="pill pill-open">ativa</span> O acesso pede o código do aplicativo autenticador além da senha.{% else %}<span class="pill pill-wait">desativada</span> Proteja a conta de administração, organização ou coordenação com um código do celular, além da senha.{% endif %}</p>
       <a class="btn btn-outline-secondary btn-sm" href="{% url 'mfa_setup' %}"><i class="bi bi-shield-lock"></i>{% if mfa_active %}Gerenciar{% else %}Ativar{% endif %}</a>
     </section>
   {% endif %}

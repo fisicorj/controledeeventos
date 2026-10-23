@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{{ inviter }} incluiu você entre os avaliadores da chamada de trabalhos de "{{ activity.title }}".
+
+Quando um trabalho for designado para você, chega um e-mail com o link e o prazo. Os trabalhos ficam em "Avaliações", no menu do portal: {{ reviews_url }}
+
+{{ institution }}
+{% endautoescape %}

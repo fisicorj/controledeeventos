@@ -4,7 +4,7 @@
 <main class="container" style="max-width:760px">
   <div class="page-head">
     <h1>Validar certificado</h1>
-    <p>Digite o código impresso no certificado para conferir se ele é autêntico.</p>
+    <p>Digite o código impresso no certificado para conferir se ele é autêntico. Tem vários? <a href="{% url 'certificate_verify_bulk' %}">Valide até 50 de uma vez</a>.</p>
   </div>
   <form method="get" action="{% url 'certificate_verify' %}" class="search-box mb-4" style="max-width:none">
     <i class="bi bi-patch-check" aria-hidden="true"></i>
@@ -27,8 +27,23 @@
       {% endif %}
       <dl class="row mb-0 panel-body">
         <dt class="col-sm-4">Participante</dt><dd class="col-sm-8">{{ certificate.participant_name }}</dd>
-        <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
-        <dt class="col-sm-4">Período</dt><dd class="col-sm-8">{{ certificate.start_date|date:'d/m/Y' }} a {{ certificate.end_date|date:'d/m/Y' }}</dd>
+        {% if certificate.role %}<dt class="col-sm-4">Certificado de</dt><dd class="col-sm-8">{{ certificate.get_role_display }}</dd>{% endif %}
+        {% if certificate.role == 'PRESENTER' %}
+          <dt class="col-sm-4">Trabalho</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
+          {% if certificate.role_detail %}<dt class="col-sm-4">Autores</dt><dd class="col-sm-8">{{ certificate.role_detail }}</dd>{% endif %}
+          <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.event_title }}</dd>
+        {% elif certificate.role == 'SPEAKER' %}
+          <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
+          {% if certificate.role_detail %}<dt class="col-sm-4">Sessões</dt><dd class="col-sm-8">{{ certificate.role_detail }}</dd>{% endif %}
+        {% elif certificate.event_title %}
+          <dt class="col-sm-4">Sessão</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
+          <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.event_title }}</dd>
+        {% else %}
+          <dt class="col-sm-4">{{ certificate.activity_type }}</dt><dd class="col-sm-8">{{ certificate.activity_title }}</dd>
+        {% endif %}
+        {% with start=certificate.start_date|date:'d/m/Y' end=certificate.end_date|date:'d/m/Y' %}
+        <dt class="col-sm-4">{% if start == end %}Data{% else %}Período{% endif %}</dt><dd class="col-sm-8">{{ start }}{% if start != end %} a {{ end }}{% endif %}</dd>
+        {% endwith %}
         {% if certificate.workload_hours %}<dt class="col-sm-4">Carga horária</dt><dd class="col-sm-8">{{ certificate.workload_hours }} horas</dd>{% endif %}
         {% if certificate.attendance_percent is not None %}<dt class="col-sm-4">Frequência</dt><dd class="col-sm-8">{{ certificate.attendance_percent }}%</dd>{% endif %}
         {% if certificate.participant_document %}<dt class="col-sm-4">{% if certificate.document_is_cpf %}CPF{% else %}{{ portal.document_label|default:"Matrícula" }}{% endif %}</dt><dd class="col-sm-8">{{ certificate.public_document }}</dd>{% endif %}

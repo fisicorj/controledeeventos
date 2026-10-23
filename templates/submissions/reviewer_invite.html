@@ -1,0 +1,40 @@
+{% extends 'accounts/auth_base.html' %}
+{% block title %}Convite para avaliar | {{ portal.portal_name }}{% endblock %}
+{% block side_title %}Avaliação de trabalhos{% endblock %}
+{% block heading %}{% if invalid %}Convite inválido{% else %}Convite para avaliar{% endif %}{% endblock %}
+{% block intro %}
+  {% if invalid %}
+    <p class="text-secondary">Este link não vale mais: já foi usado, foi cancelado ou venceu. Peça um novo convite à organização do evento.</p>
+  {% elif user.is_authenticated %}
+    <p class="text-secondary">Você foi convidado para avaliar trabalhos da chamada de <strong>{{ invite.call.activity.title }}</strong>. Aceite para entrar como avaliador com a conta <strong>{{ user.get_full_name|default:user.username }}</strong>.</p>
+    {% if other_email %}
+      <div class="alert alert-warning small" role="alert">O convite foi enviado para <strong>{{ invite.email }}</strong>, e você entrou com a conta de <strong>{{ user.email|default:"e-mail não informado" }}</strong>. Se o convite não era para você, não aceite. Ao aceitar com esta conta, quem cuida da chamada é avisado.</div>
+    {% endif %}
+  {% else %}
+    <p class="text-secondary">Você foi convidado para avaliar trabalhos da chamada de <strong>{{ invite.call.activity.title }}</strong>. Crie a sua conta abaixo: ela usa o e-mail <strong>{{ invite.email }}</strong>, que já fica confirmado.</p>
+    <p class="small">Já tem conta no portal? <a href="{% url 'login' %}?next={{ request.path|urlencode }}">Entre com ela</a> e abra este link de novo.</p>
+  {% endif %}
+{% endblock %}
+{% block form %}
+  {% if invalid %}
+    <a class="btn btn-outline-secondary w-100" href="{% url 'login' %}">Ir para o login</a>
+  {% elif user.is_authenticated %}
+    <form method="post">
+      {% csrf_token %}
+      {% if other_email %}
+        <div class="form-check mb-3">
+          <input class="form-check-input{% if confirm_error %} is-invalid{% endif %}" type="checkbox" name="confirm_other" value="1" id="confirm_other"{% if confirm_error %} aria-describedby="confirm_other_error"{% endif %}>
+          <label class="form-check-label" for="confirm_other">O convite é para mim: aceitar com a conta de {{ user.email|default:user.username }}</label>
+          {% if confirm_error %}<div class="invalid-feedback" id="confirm_other_error">Marque a confirmação para aceitar com esta conta.</div>{% endif %}
+        </div>
+      {% endif %}
+      <button class="btn btn-primary w-100 py-2">Aceitar e entrar como avaliador</button>
+    </form>
+  {% else %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include 'core/_form.html' with form=form %}
+      <button class="btn btn-primary w-100 py-2 mt-4">Criar conta e aceitar</button>
+    </form>
+  {% endif %}
+{% endblock %}

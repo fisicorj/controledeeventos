@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Horas por turma | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'batch_list' %}">Emissão avulsa</a></div>
+    <h1>Horas por turma</h1>
+    <p>Total de horas certificadas de cada participante da turma, somando os certificados válidos das emissões avulsas{% if not user_is_admin %} que você criou{% endif %}. A turma é a da coluna "Turma" da planilha.</p>
+  </div>
+  {% if groups %}
+    <form method="get" class="panel panel-body mb-4">
+      <div class="row g-3 align-items-end">
+        <div class="col-sm-6 col-lg-4">
+          <label class="form-label" for="turma">Turma</label>
+          <select id="turma" name="turma" class="form-select" required>
+            <option value="">Escolha...</option>
+            {% for g in groups %}<option value="{{ g }}"{% if g == group %} selected{% endif %}>{{ g }}</option>{% endfor %}
+          </select>
+        </div>
+        {% if semesters %}
+          <div class="col-sm-6 col-lg-3">
+            <label class="form-label" for="semestre">Semestre</label>
+            <select id="semestre" name="semestre" class="form-select">
+              <option value="">Todos</option>
+              {% for s in semesters %}<option value="{{ s }}"{% if s == semester %} selected{% endif %}>{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+        {% endif %}
+        <div class="col-auto"><button class="btn btn-primary"><i class="bi bi-funnel"></i>Ver</button></div>
+        {% if rows %}<div class="col-auto"><a class="btn btn-outline-secondary" href="?turma={{ group|urlencode }}&amp;semestre={{ semester|urlencode }}&amp;formato=csv"><i class="bi bi-filetype-csv"></i>Planilha (CSV)</a></div>{% endif %}
+      </div>
+    </form>
+  {% else %}
+    <div class="panel empty-state"><i class="bi bi-people"></i>Nenhuma emissão avulsa com a coluna "Turma" preenchida.</div>
+  {% endif %}
+  {% if group and rows %}
+    <section class="panel">
+      <div class="panel-head"><h2>{{ group }}{% if semester %} · {{ semester }}{% endif %}</h2><span class="tabular fw-semibold">{{ rows|length }} participante{{ rows|length|pluralize }} · {{ total }} h</span></div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Participante</th><th>Matrícula/CPF</th><th class="text-end">Certificados</th><th class="text-end">Horas</th></tr></thead>
+          <tbody>
+            {% for person, document, items, hours in rows %}
+              <tr>
+                <td><span class="fw-semibold">{{ person }}</span><div class="small text-secondary">{% for c in items %}{{ c.full_title }}{% if not forloop.last %} · {% endif %}{% endfor %}</div></td>
+                <td class="tabular">{{ document|default:'-' }}</td>
+                <td class="tabular text-end">{{ items|length }}</td>
+                <td class="tabular text-end">{{ hours }} h</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% elif group %}
+    <div class="panel empty-state">Nenhum certificado válido para esta turma{% if semester %} neste semestre{% endif %}.</div>
+  {% endif %}
+</main>
+{% endblock %}

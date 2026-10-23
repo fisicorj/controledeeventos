@@ -36,6 +36,16 @@ def arena_deploy_checks(app_configs, **kwargs):
                 id='arena.W003',
             )
         )
+    if provisional_site_url():
+        warnings.append(
+            Warning(
+                f'SITE_URL ({settings.SITE_URL}) é um endereço provisório da AWS.',
+                hint='O QR Code e o link de validação dos certificados guardam este endereço. Defina o domínio '
+                'definitivo antes de emitir certificados reais: os emitidos com o endereço provisório deixam de abrir '
+                'quando ele for trocado.',
+                id='arena.W005',
+            )
+        )
     # Senha do papel da aplicação e, se houver, a do dono das tabelas (só presente onde roda o migrate).
     passwords = [('DB_PASSWORD', settings.DATABASES['default'].get('PASSWORD') or '')]
     if settings.DB_MIGRATE_USER:
@@ -51,6 +61,17 @@ def arena_deploy_checks(app_configs, **kwargs):
                 )
             )
     return warnings
+
+
+PROVISIONAL_HOSTS = ('.cloudfront.net', '.elb.amazonaws.com')
+
+
+def provisional_site_url():
+    """O endereço público é um nome gerado pela AWS (CloudFront ou ALB), que muda se a infraestrutura mudar?"""
+    from urllib.parse import urlsplit
+
+    host = (urlsplit(settings.SITE_URL).hostname or '').lower()
+    return host.endswith(PROVISIONAL_HOSTS)
 
 
 WEAK_PASSWORDS = {'', 'arena_password', 'postgres', 'password', 'senha', '123456'}

@@ -127,9 +127,47 @@ def ics_attachment(activity_id):
     return f'{activity.slug}.ics', content, 'text/calendar'
 
 
+def personal_sessions(registration):
+    """Sessões da agenda pessoal: no modo por sessão, as confirmadas da pessoa (sem vaga a confirmar); senão,
+    None (a agenda leva o evento inteiro)."""
+    if not registration.activity.per_session:
+        return None
+    from activities.models import Session
+
+    return list(
+        Session.objects.filter(
+            enrollments__registration=registration,
+            enrollments__status='CONFIRMED',
+            enrollments__offer_expires_at__isnull=True,
+        ).order_by('start_at')
+    )
+
+
+def personal_ics(registration):
+    """(nome do arquivo, conteúdo) da agenda da pessoa."""
+    from activities import calendar
+
+    activity = registration.activity
+    content = calendar.ics(
+        activity,
+        absolute_url(activity.get_absolute_url()),
+        SiteSettings.load().institution_name,
+        sessions=personal_sessions(registration),
+    )
+    return f'{activity.slug}.ics', content
+
+
+def my_ics_attachment(registration_id):
+    """Agenda (.ics) da inscrição: no modo por sessão, só as sessões escolhidas."""
+    from .models import Registration
+
+    name, content = personal_ics(Registration.objects.select_related('activity').get(pk=registration_id))
+    return name, content, 'text/calendar'
+
+
 def _ticket(registration):
     """Anexos do ingresso: QR Code e agenda (.ics)."""
-    return [{'kind': 'qr', 'id': registration.pk}, {'kind': 'ics', 'id': registration.activity_id}]
+    return [{'kind': 'qr', 'id': registration.pk}, {'kind': 'my_ics', 'id': registration.pk}]
 
 
 def _survey_context(registration):
@@ -157,7 +195,38 @@ def reminder_message(registration):
     )
 
 
+def session_reminder_message(registration, sessions):
+    first = sessions[0]
+    return build_message(
+        registration.user.email,
+        f'lembrete: {first.title}'
+        if len(sessions) == 1
+        else f'lembrete: suas sessões em {registration.activity.title}',
+        'session_reminder',
+        {
+            **_registration_context(registration),
+            'sessions': sessions,
+            'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+        },
+        _qr_attachment(registration),
+    )
+
+
 # ---------- Avisos disparados pelas ações do sistema (vão para a fila de e-mails)
+
+
+def _chosen_sessions(registration):
+    """Sessões escolhidas (atividade com inscrição por sessão), para listar no e-mail."""
+    if not registration.activity.per_session:
+        return {}
+    enrollments = registration.session_enrollments.filter(status__in=['CONFIRMED', 'WAITLISTED']).select_related(
+        'session'
+    )
+    return {
+        'per_session': True,
+        'chosen_sessions': sorted(enrollments, key=lambda e: e.session.start_at),
+        'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+    }
 
 
 def notify_registration_confirmed(registration):
@@ -165,10 +234,38 @@ def notify_registration_confirmed(registration):
         registration.user.email,
         f'inscrição confirmada em {registration.activity.title}',
         'registration_confirmed',
-        _registration_context(registration),
+        {**_registration_context(registration), **_chosen_sessions(registration)},
         _ticket(registration),
         group=f'registration:{registration.pk}',
     )
+
+
+def notify_session_promoted(enrollment):
+    """Abriu vaga numa sessão escolhida: a pessoa saiu da fila da sessão e já está confirmada nela."""
+    registration = enrollment.registration
+    queue(
+        registration.user.email,
+        f'abriu uma vaga na sessão {enrollment.session.title}',
+        'session_promoted',
+        {**_registration_context(registration), **_chosen_sessions(registration), 'session': enrollment.session},
+        group=f'registration:{registration.pk}',
+    )
+
+
+def notify_session_removed(session, registrations):
+    """A organização excluiu uma sessão que a pessoa tinha escolhido."""
+    for r in registrations:
+        queue(
+            r.user.email,
+            f'sessão cancelada: {session.title}',
+            'session_removed',
+            {
+                **_registration_context(r),
+                'session': session,
+                'sessions_url': absolute_url(reverse('registration_sessions', args=[r.pk])),
+            },
+            group=f'activity:{r.activity_id}:session-removed',
+        )
 
 
 def notify_waitlisted(registration):
@@ -186,7 +283,7 @@ def notify_promoted(registration):
         registration.user.email,
         f'abriu uma vaga em {registration.activity.title}',
         'promoted',
-        _registration_context(registration),
+        {**_registration_context(registration), **_chosen_sessions(registration)},
         _ticket(registration),
         group=f'registration:{registration.pk}',
     )
@@ -261,7 +358,11 @@ def notify_activity_changed(activity, registrations, changes):
 
 
 def notify_certificates(certificates):
+    by_session = {}
     for c in certificates:
+        if c.session_enrollment_id:
+            by_session.setdefault(c.session_enrollment.registration_id, []).append(c)
+            continue
         queue(
             c.registration.user.email,
             f'seu certificado de {c.activity_title} está disponível',
@@ -274,6 +375,31 @@ def notify_certificates(certificates):
             },
             group=f'activity:{c.registration.activity_id}:certificates',
         )
+    for group in by_session.values():
+        _notify_session_certificates(group)
+
+
+def _notify_session_certificates(certificates):
+    """Certificado por sessão: um e-mail só por pessoa, com todos os certificados que ela ganhou."""
+    registration = certificates[0].session_enrollment.registration
+    certificates = sorted(certificates, key=lambda c: c.start_date)
+    many = len(certificates) > 1
+    queue(
+        registration.user.email,
+        f'seus certificados de {registration.activity.title} estão disponíveis'
+        if many
+        else f'seu certificado de {certificates[0].activity_title} está disponível',
+        'session_certificates_issued',
+        {
+            **_registration_context(registration),
+            **_survey_context(registration),
+            'certificates': [
+                (c, absolute_url(reverse('certificate_verify_code', args=[c.code]))) for c in certificates
+            ],
+            'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+        },
+        group=f'activity:{registration.activity_id}:certificates',
+    )
 
 
 def notify_survey(registrations):
@@ -303,3 +429,107 @@ def send_announcement(announcement, registrations):
         )
         queued += email is not None
     return queued
+
+
+SESSION_CHANGE_LABELS = {'start_at': 'Início', 'end_at': 'Término', 'location': 'Local'}
+
+
+def notify_session_changed(session, registrations, changes):
+    """O horário ou o local de uma sessão mudou. changes: [(campo, antes, depois)]."""
+
+    def show(field, value):
+        if field == 'location':
+            return value or 'o local da atividade'
+        return timezone.localtime(value).strftime('%d/%m/%Y às %H:%M')
+
+    lines = [
+        {'label': SESSION_CHANGE_LABELS[field], 'before': show(field, old), 'after': show(field, new)}
+        for field, old, new in changes
+    ]
+    for r in registrations:
+        queue(
+            r.user.email,
+            f'mudança na sessão {session.title}',
+            'session_changed',
+            {
+                **_registration_context(r),
+                'session': session,
+                'changes': lines,
+                'sessions_url': absolute_url(reverse('registration_sessions', args=[r.pk]))
+                if r.activity.per_session
+                else '',
+            },
+            group=f'activity:{r.activity_id}:session-changed',
+        )
+
+
+def notify_choose_sessions(registrations):
+    """Inscritos que ainda não escolheram sessões (o certificado é por sessão)."""
+    for r in registrations:
+        queue(
+            r.user.email,
+            f'escolha as suas sessões em {r.activity.title}',
+            'choose_sessions',
+            {**_registration_context(r), 'sessions_url': absolute_url(reverse('registration_sessions', args=[r.pk]))},
+            group=f'activity:{r.activity_id}:choose-sessions',
+        )
+
+
+def notify_session_offer(enrollment):
+    """Abriu vaga numa sessão: confirme até o prazo (senão, ela passa para o próximo da fila)."""
+    registration = enrollment.registration
+    queue(
+        registration.user.email,
+        f'abriu uma vaga na sessão {enrollment.session.title}: confirme até '
+        f'{timezone.localtime(enrollment.offer_expires_at):%d/%m às %H:%M}',
+        'session_offer',
+        {
+            **_registration_context(registration),
+            'session': enrollment.session,
+            'deadline': enrollment.offer_expires_at,
+            'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+        },
+        group=f'registration:{registration.pk}',
+    )
+
+
+def notify_session_offer_expired(enrollment):
+    registration = enrollment.registration
+    queue(
+        registration.user.email,
+        f'o prazo para confirmar a vaga na sessão {enrollment.session.title} terminou',
+        'session_offer_expired',
+        {
+            **_registration_context(registration),
+            'session': enrollment.session,
+            'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+        },
+        group=f'registration:{registration.pk}',
+    )
+
+
+def notify_cancelled_by_staff(registration, note):
+    queue(
+        registration.user.email,
+        f'inscrição cancelada em {registration.activity.title}',
+        'registration_cancelled_by_staff',
+        {**_registration_context(registration), 'note': note},
+        group=f'registration:{registration.pk}',
+    )
+
+
+def notify_session_changed_by_staff(enrollment, added, note):
+    registration = enrollment.registration
+    queue(
+        registration.user.email,
+        f'{"você foi incluído na" if added else "você saiu da"} sessão {enrollment.session.title}',
+        'session_changed_by_staff',
+        {
+            **_registration_context(registration),
+            'session': enrollment.session,
+            'added': added,
+            'note': note,
+            'sessions_url': absolute_url(reverse('registration_sessions', args=[registration.pk])),
+        },
+        group=f'registration:{registration.pk}',
+    )

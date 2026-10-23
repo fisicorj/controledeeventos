@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if again %}O autor mandou uma versão corrigida de um trabalho que você avaliou{% else %}Você foi designado para avaliar um trabalho{% endif %} em "{{ activity.title }}":
+
+Título: {{ submission.title }}{% if submission.area %}
+Área: {{ submission.area }}{% endif %}
+
+Leia o trabalho e registre a sua avaliação{% if review.due_at %} até {{ review.due_at|date:'d/m/Y H:i' }}{% endif %} em: {{ review_url }}
+{% if submission.call.blind_review %}A avaliação é às cegas: você não vê os autores, e eles não saberão quem avaliou.{% else %}O autor verá os seus comentários, mas não o seu nome.{% endif %}
+
+{{ institution }}
+{% endautoescape %}

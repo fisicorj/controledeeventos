@@ -5,9 +5,10 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-from activities.models import Activity
+from activities.models import Activity, Speaker
 from core.storage import private_storage as _private_storage
-from registrations.models import Registration
+from registrations.models import Registration, SessionEnrollment
+from submissions.models import Submission
 
 # Sem letras e números que se confundem (0/O, 1/I/L), para facilitar a digitação na validação.
 CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
@@ -65,20 +66,55 @@ class CertificateBatch(models.Model):
         return self.cancelled_at is not None
 
 
+SOURCES = ('registration', 'batch', 'session_enrollment', 'speaker', 'submission')
+
+
+def _one_source():
+    """Exatamente uma origem preenchida (inscrição, lote avulso, sessão, palestrante ou trabalho)."""
+    condition = None
+    for chosen in SOURCES:
+        part = Q(**{f'{name}__isnull': name != chosen for name in SOURCES})
+        condition = part if condition is None else condition | part
+    return condition
+
+
 class Certificate(models.Model):
-    # Cada certificado vem de uma inscrição (atividade do sistema) ou de uma emissão avulsa.
+    # Cada certificado vem de uma inscrição (atividade do sistema), de uma sessão escolhida (atividade com
+    # certificado por sessão) ou de uma emissão avulsa. Só um dos três.
     registration = models.OneToOneField(
         Registration, on_delete=models.PROTECT, related_name='certificate', null=True, blank=True
+    )
+    session_enrollment = models.OneToOneField(
+        SessionEnrollment, on_delete=models.PROTECT, related_name='certificate', null=True, blank=True
     )
     batch = models.ForeignKey(
         CertificateBatch, on_delete=models.PROTECT, related_name='certificates', null=True, blank=True
     )
+    # Certificados de palestrante e de apresentação de trabalho (certificates/roles.py).
+    speaker = models.OneToOneField(Speaker, on_delete=models.PROTECT, related_name='certificate', null=True, blank=True)
+    # Apresentação: um por autor do trabalho. coauthor_email vazio é o autor de contato (quem submeteu);
+    # preenchido, é o coautor com esse e-mail.
+    submission = models.ForeignKey(
+        Submission, on_delete=models.PROTECT, related_name='certificates', null=True, blank=True
+    )
+    coauthor_email = models.EmailField(blank=True)
+
+    class Role(models.TextChoices):
+        ATTENDEE = '', 'Participação'
+        SPEAKER = 'SPEAKER', 'Palestrante'
+        PRESENTER = 'PRESENTER', 'Apresentação de trabalho'
+
+    role = models.CharField('Tipo de certificado', max_length=20, choices=Role.choices, default='', blank=True)
+    # Palestrante: as sessões em que falou. Apresentação: os autores do trabalho.
+    role_detail = models.CharField(max_length=600, blank=True)
     code = models.CharField('Código de validação', max_length=14, unique=True, default=generate_code, editable=False)
     # Os dados abaixo são uma "foto" do momento da emissão: o certificado continua válido e igual
     # mesmo que o nome do participante ou o título da atividade mudem depois.
     participant_name = models.CharField(max_length=300)
     participant_document = models.CharField('Matrícula/RA', max_length=50, blank=True)
     activity_title = models.CharField(max_length=200)
+    # Certificado por sessão: activity_title é o título da sessão e aqui fica o nome do evento.
+    event_title = models.CharField(max_length=200, blank=True)
     activity_type = models.CharField(max_length=40)
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
@@ -107,10 +143,11 @@ class Certificate(models.Model):
     class Meta:
         ordering = ['-issued_at']
         constraints = [
-            models.CheckConstraint(
-                condition=Q(registration__isnull=False, batch__isnull=True)
-                | Q(registration__isnull=True, batch__isnull=False),
-                name='certificate_registration_xor_batch',
+            models.CheckConstraint(condition=_one_source(), name='certificate_one_source'),
+            models.UniqueConstraint(
+                fields=['submission', 'coauthor_email'],
+                condition=Q(submission__isnull=False),
+                name='certificate_unique_author_per_submission',
             ),
             models.UniqueConstraint(
                 fields=['batch', 'participant_document'],
@@ -125,6 +162,33 @@ class Certificate(models.Model):
     @property
     def is_revoked(self):
         return self.revoked_at is not None
+
+    @property
+    def owner_registration(self):
+        """Inscrição de quem recebeu o certificado (de atividade ou de sessão); None na emissão avulsa."""
+        if self.registration_id:
+            return self.registration
+        if self.session_enrollment_id:
+            return self.session_enrollment.registration
+        return None
+
+    @property
+    def source_activity(self):
+        if self.speaker_id:
+            return self.speaker.activity
+        if self.submission_id:
+            return self.submission.call.activity
+        registration = self.owner_registration
+        return registration.activity if registration else None
+
+    @property
+    def full_title(self):
+        """Título para listas: "Sessão (Evento)", "Palestrante: Evento", "Trabalho (Evento)"."""
+        if self.role == self.Role.SPEAKER:
+            return f'Palestrante: {self.activity_title}'
+        if self.role == self.Role.PRESENTER:
+            return f'Apresentação: {self.activity_title} ({self.event_title})'
+        return f'{self.activity_title} ({self.event_title})' if self.event_title else self.activity_title
 
     @property
     def document_is_cpf(self):

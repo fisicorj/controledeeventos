@@ -18,7 +18,7 @@
   <header class="site-header">
     <nav class="navbar navbar-expand-lg" aria-label="Navegação principal">
       <div class="container">
-        <a class="brand" href="{% url 'home' %}">
+        <a class="brand" href="{% url 'home' %}" aria-label="{{ portal.portal_name }}, página inicial">
           {% if portal.logo %}
             <img src="{{ portal.logo.url }}" alt="{{ portal.institution_name }}" class="brand-logo">
             <span class="brand-divider d-none d-sm-block"></span>
@@ -38,8 +38,11 @@
               {% if user_is_organizer %}
                 <li class="nav-item"><a class="nav-link{% if url_name == 'organizer_dashboard' or 'organizer' in request.path or '/avulsos/' in request.path %} active{% endif %}" href="{% url 'organizer_dashboard' %}">Painel do organizador</a></li>
               {% endif %}
-              {% if user.role == 'PARTICIPANT' and not user.is_superuser and user.checkin_activities.exists %}
-                <li class="nav-item"><a class="nav-link{% if '/attendance/' in request.path %} active{% endif %}" href="{% url 'checkin_home' %}">Check-in</a></li>
+              {% if user_reviews.show %}
+                <li class="nav-item"><a class="nav-link{% if url_name == 'my_reviews' or url_name == 'review_form' %} active{% endif %}" href="{% url 'my_reviews' %}">Avaliações{% if user_reviews.pending %} <span class="badge rounded-pill text-bg-danger" aria-label="{{ user_reviews.pending }} pendente{{ user_reviews.pending|pluralize }}">{{ user_reviews.pending }}</span>{% endif %}</a></li>
+              {% endif %}
+              {% if user_can_checkin %}
+                <li class="nav-item"><a class="nav-link{% if '/attendance/' in request.path %} active{% endif %}" href="{% url 'checkin_home' %}"><i class="bi bi-qr-code-scan me-1" aria-hidden="true"></i>Check-in</a></li>
               {% endif %}
               {% if user_is_admin %}
                 <li class="nav-item"><a class="nav-link{% if '/configuracoes/' in request.path or '/auditoria/' in request.path %} active{% endif %}" href="{% url 'site_settings' %}">Configurações</a></li>
@@ -56,6 +59,7 @@
                 <ul class="dropdown-menu dropdown-menu-end">
                   <li><a class="dropdown-item" href="{% url 'my_registrations' %}"><i class="bi bi-ticket-perforated"></i>Minhas inscrições</a></li>
                   <li><a class="dropdown-item" href="{% url 'my_hours' %}"><i class="bi bi-hourglass-split"></i>Minhas horas</a></li>
+                  <li><a class="dropdown-item" href="{% url 'my_submissions' %}"><i class="bi bi-journal-text"></i>Meus trabalhos</a></li>
                   <li><a class="dropdown-item" href="{% url 'profile' %}"><i class="bi bi-person"></i>Meus dados</a></li>
                   <li><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key"></i>Trocar senha</a></li>
                   <li><hr class="dropdown-divider"></li>
@@ -99,6 +103,11 @@
   {% endif %}
 
   {% block content %}{% endblock %}
+
+  {% if user_can_checkin and '/attendance/' not in request.path %}
+    {# Atalho no celular: abre o leitor de QR da sessão que está acontecendo agora (ou a lista para escolher). #}
+    <a class="quick-scan d-lg-none" href="{% url 'checkin_quick' %}"><i class="bi bi-qr-code-scan" aria-hidden="true"></i><span>Ler QR Code</span></a>
+  {% endif %}
 
   {% block footer %}
   <footer class="site-footer">

@@ -109,3 +109,20 @@ class InviteTests(TestCase):
         StaffInvite.objects.filter(email='aceito@exemplo.com').update(expires_at=long_ago)
         self.assertEqual(maintenance.purge_invites(), 2)
         self.assertEqual(list(StaffInvite.objects.values_list('email', flat=True)), ['aceito@exemplo.com'])
+
+    def test_reenviar_gera_link_novo_e_derruba_o_antigo(self):
+        # P3 da 4ª auditoria
+        _, mail = self.invite()
+        old_path = self.link(mail)
+        invite = StaffInvite.objects.get()
+        StaffInvite.objects.filter(pk=invite.pk).update(expires_at=timezone.now() - timedelta(days=1))  # venceu
+        self.assertContains(self.client.get(reverse('user_admin_invites')), 'Reenviar')
+        self.client.post(reverse('user_admin_invite_resend', args=[invite.pk]))
+        new_mail = OutgoingEmail.objects.filter(group='invite').order_by('-id').first()
+        new_path = self.link(new_mail)
+        self.assertNotEqual(new_path, old_path)
+        self.assertEqual(Client().get(old_path).status_code, 404)
+        Client().post(new_path, FORM)
+        self.assertEqual(User.objects.get(username='nina').role, 'ORGANIZER')
+        response = self.client.post(reverse('user_admin_invite_resend', args=[StaffInvite.objects.latest('pk').pk]))
+        self.assertContains(self.client.get(response.url), 'já foi aceito')

@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Todas as avaliações do trabalho "{{ submission.title }}", em "{{ activity.title }}", foram entregues.
+
+Veja as avaliações e registre a decisão em: {{ manage_url }}
+
+{{ institution }}
+{% endautoescape %}

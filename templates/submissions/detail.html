@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ submission.title }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_submissions' %}">Meus trabalhos</a></div>
+    <div class="d-flex gap-2 align-items-center flex-wrap mb-1">{% include 'submissions/_status.html' with s=submission %}<span class="type-label">{{ activity.title }}</span></div>
+    <h1>{{ submission.title }}</h1>
+    <p>{{ submission.author_names }}{% if submission.area %} · {{ submission.area }}{% endif %} · versão {{ submission.version }}</p>
+  </div>
+
+  {% if submission.status == 'REVISION' %}
+    <div class="alert alert-warning flash"><i class="bi bi-pencil-square" aria-hidden="true"></i><div>A organização pediu correções. <a href="{% url 'submission_edit' submission.pk %}">Envie a versão corrigida</a>.</div></div>
+  {% elif submission.status == 'ACCEPTED' %}
+    <div class="alert alert-success flash"><i class="bi bi-check-circle" aria-hidden="true"></i><div>Trabalho aprovado{% if submission.session %}, para apresentação em <strong>{{ submission.session.title }}</strong> ({{ submission.session.start_at|date:'d/m/Y \à\s H:i' }}){% endif %}. Você está inscrito no evento: o QR Code fica em <a href="{% url 'my_registrations' %}">Minhas inscrições</a>.</div></div>
+  {% endif %}
+
+  {% if submission.decision_note %}
+    <section class="panel panel-body mb-4"><h2 class="h6">Mensagem da organização</h2><div class="small">{{ submission.decision_note|linebreaksbr }}</div></section>
+  {% endif %}
+  {% if comments %}
+    <section class="panel panel-body mb-4">
+      <h2 class="h6">Comentários dos avaliadores</h2>
+      {% for r in comments %}<div class="notice"><strong class="small">Avaliação {{ forloop.counter }}</strong><div class="small mt-1">{{ r.comments_to_author|linebreaksbr }}</div></div>{% endfor %}
+    </section>
+  {% endif %}
+
+  <section class="panel panel-body mb-4">
+    <h2 class="h6">Resumo</h2>
+    <div class="small">{{ submission.abstract|linebreaksbr }}</div>
+    {% if submission.keywords %}<p class="small text-secondary mt-2 mb-0">Palavras-chave: {{ submission.keywords }}</p>{% endif %}
+    {% if submission.file %}<p class="mt-3 mb-0"><a href="{% url 'submission_file' submission.pk %}" target="_blank"><i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i>{{ submission.file_name|default:"Abrir o arquivo" }}</a></p>{% else %}<p class="mt-3 mb-0 small text-secondary">Arquivo removido.</p>{% endif %}
+  </section>
+
+  <div class="d-flex gap-2 flex-wrap">
+    {% if submission.author_can_edit %}<a class="btn btn-primary" href="{% url 'submission_edit' submission.pk %}">{% if submission.status == 'REVISION' %}Enviar versão corrigida{% else %}Editar ou trocar o arquivo{% endif %}</a>{% endif %}
+    {% if not submission.is_final %}
+      <form method="post" action="{% url 'submission_withdraw' submission.pk %}" data-confirm="Retirar o trabalho da avaliação? Não dá para desfazer." data-confirm-label="Retirar" data-confirm-danger>{% csrf_token %}<button class="btn btn-outline-secondary text-danger">Retirar trabalho</button></form>
+    {% endif %}
+    <a class="btn btn-outline-secondary" href="{% url 'call_page' activity.slug %}">Ver a chamada</a>
+  </div>
+</main>
+{% endblock %}

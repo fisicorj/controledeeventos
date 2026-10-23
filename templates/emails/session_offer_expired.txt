@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+O prazo para confirmar a vaga na sessão "{{ session.title }}", de "{{ activity.title }}", terminou e ela passou para a próxima pessoa da fila.
+
+Se ainda quiser assistir, entre de novo na fila da sessão: {{ sessions_url }}
+
+{{ institution }}
+{% endautoescape %}

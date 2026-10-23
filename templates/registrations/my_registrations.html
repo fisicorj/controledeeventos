@@ -21,10 +21,25 @@
             <ul class="event-meta">
               <li><i class="bi bi-clock" aria-hidden="true"></i>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</li>
               {% if activity.location %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i>{{ activity.location }}</li>{% endif %}
-              {% if registration.status == 'CONFIRMED' and registration.attendance_percent is not None and activity.status != 'CANCELLED' %}
+              {% if activity.per_session %}
+                {% if registration.status == 'CONFIRMED' and activity.status != 'CANCELLED' %}
+                  <li><i class="bi bi-ui-checks" aria-hidden="true"></i>{% with n=registration.chosen_sessions|length %}{% if n %}{{ n }} sess{{ n|pluralize:"ão,ões" }} escolhida{{ n|pluralize }}{% else %}Nenhuma sessão escolhida{% endif %}{% endwith %}</li>
+                {% endif %}
+              {% elif registration.status == 'CONFIRMED' and registration.attendance_percent is not None and activity.status != 'CANCELLED' %}
                 <li><i class="bi bi-person-check" aria-hidden="true"></i>Frequência: {{ registration.attendance_count }}/{{ registration.session_count }} sessões ({{ registration.attendance_percent }}%)</li>
               {% endif %}
             </ul>
+            {% if activity.per_session and registration.status == 'CONFIRMED' and activity.status != 'CANCELLED' and not registration.offer_pending %}
+              {% if registration.chosen_sessions %}
+                <ul class="small list-unstyled mb-0">
+                  {% for e in registration.chosen_sessions %}<li><i class="bi {% if e.status == 'CONFIRMED' %}bi-check2 text-success{% else %}bi-hourglass-split text-warning{% endif %} me-1" aria-hidden="true"></i>{{ e.session.title }} <span class="text-secondary">{{ e.session.start_at|date:'d/m H:i' }}{% if e.status == 'WAITLISTED' %} · lista de espera{% elif e.offer_pending %} · <strong>confirme a vaga até {{ e.offer_expires_at|date:'d/m H:i' }}</strong>{% endif %}</span></li>{% endfor %}
+                </ul>
+              {% endif %}
+              <div><a class="btn btn-sm {% if registration.chosen_sessions or activity.status == 'FINISHED' %}btn-outline-primary{% else %}btn-primary{% endif %}" href="{% url 'registration_sessions' registration.pk %}"><i class="bi bi-ui-checks"></i>{% if activity.status == 'FINISHED' %}Sessões e certificados{% elif registration.chosen_sessions %}Trocar sessões{% else %}Escolher sessões{% endif %}</a></div>
+            {% endif %}
+            {% if registration.status == 'CONFIRMED' and activity.status == 'PUBLISHED' and not registration.offer_pending %}
+              <div><a class="btn btn-sm btn-outline-secondary" href="{% url 'registration_calendar' registration.pk %}"><i class="bi bi-calendar-plus"></i>{% if activity.per_session %}Minhas sessões na agenda (.ics){% else %}Adicionar à agenda (.ics){% endif %}</a></div>
+            {% endif %}
             {% if registration.materials %}
               <div><a class="btn btn-sm btn-outline-primary" href="{{ activity.get_absolute_url }}#materiais"><i class="bi bi-folder2-open"></i>Materiais ({{ registration.materials|length }})</a></div>
             {% endif %}
@@ -36,7 +51,13 @@
               {% if registration.can_survey %}
                 <a class="btn btn-sm {% if registration.survey_blocks_certificate %}btn-primary{% else %}btn-outline-primary{% endif %} mb-2" href="{% url 'survey' registration.pk %}"><i class="bi bi-star"></i>Avaliar a atividade</a>
               {% endif %}
-              {% if registration.certificate.is_revoked %}
+              {% if activity.per_session %}
+                {% with n=registration.session_certificates|length %}
+                {% if n %}<div class="small mb-2">{{ n }} certificado{{ n|pluralize }} de sessão emitido{{ n|pluralize }}. Baixe em "Sessões e certificados".</div>
+                {% elif registration.status == 'CONFIRMED' and activity.certificate_enabled %}<div class="small text-secondary">Atividade finalizada. O certificado sai para cada sessão escolhida em que você teve presença.</div>
+                {% else %}<div class="small text-secondary">Atividade finalizada.</div>{% endif %}
+                {% endwith %}
+              {% elif registration.certificate.is_revoked %}
                 <div class="small text-danger mb-2"><i class="bi bi-x-octagon me-1" aria-hidden="true"></i>O certificado desta atividade foi revogado pela organização em {{ registration.certificate.revoked_at|date:'d/m/Y' }}.</div>
               {% elif registration.certificate %}
                 <div class="small mb-2">Certificado emitido. Código de validação: <strong class="tabular">{{ registration.certificate.code }}</strong></div>
@@ -68,6 +89,9 @@
             {% if activity.status == 'FINISHED' and registration.certificate.is_revoked %}
               <i class="bi bi-x-octagon fs-1 text-secondary" aria-hidden="true"></i>
               <small>Certificado revogado</small>
+            {% elif activity.status == 'FINISHED' and registration.session_certificates %}
+              <i class="bi bi-award fs-1 text-primary" aria-hidden="true"></i>
+              <a class="btn btn-primary btn-sm" href="{% url 'registration_sessions' registration.pk %}">Certificados ({{ registration.session_certificates|length }})</a>
             {% elif activity.status == 'FINISHED' and registration.certificate and registration.survey_blocks_certificate %}
               <i class="bi bi-lock fs-1 text-secondary" aria-hidden="true"></i>
               <small>Responda a avaliação para liberar o certificado</small>

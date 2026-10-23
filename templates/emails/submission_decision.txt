@@ -1,0 +1,18 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if submission.status == 'ACCEPTED' %}Parabéns! O seu trabalho "{{ submission.title }}" foi aprovado para "{{ activity.title }}".{% elif submission.status == 'REVISION' %}O seu trabalho "{{ submission.title }}" precisa de correções antes da decisão final.{% else %}O seu trabalho "{{ submission.title }}" não foi aprovado para "{{ activity.title }}".{% endif %}
+{% if submission.decision_note %}
+Mensagem da organização:
+{{ submission.decision_note }}
+{% endif %}{% if comments %}
+Comentários dos avaliadores:
+{% for c in comments %}
+Avaliação {{ forloop.counter }}:
+{{ c }}
+{% endfor %}{% endif %}{% if submission.status == 'REVISION' %}
+Envie a versão corrigida em: {{ submission_url }}
+{% elif registration %}
+A sua inscrição no evento está confirmada. O QR Code segue anexo, junto com o arquivo de agenda (.ics); ele também fica em "Minhas inscrições": {{ my_registrations_url }}
+{% include 'emails/_activity_info.txt' %}{% endif %}
+{{ institution }}
+{% endautoescape %}

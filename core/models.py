@@ -375,3 +375,18 @@ class MaintenanceRun(models.Model):
 
     def __str__(self):
         return f'Faxina de {timezone.localtime(self.started_at):%d/%m/%Y %H:%M}'
+
+
+class PeriodicTask(models.Model):
+    """Última execução de cada tarefa periódica do worker (core/periodic.py). Fica no banco para valer entre
+    reinícios e entre dois workers rodando juntos (na troca de versão): só um pega a vez."""
+
+    name = models.CharField(max_length=60, primary_key=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'tarefa periódica'
+        verbose_name_plural = 'tarefas periódicas'
+
+    def __str__(self):
+        return self.name

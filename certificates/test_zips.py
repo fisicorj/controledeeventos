@@ -127,6 +127,46 @@ class ZipExportTests(TestCase):
         self.assertEqual(zips.process(limit=1), 1)
         self.assertEqual(ZipExport.objects.filter(status='PENDING').count(), 1)
 
+    def test_modo_thread_monta_em_segundo_plano(self):
+        # sem worker (OUTBOX_MODE=thread): a linha de execução do próprio servidor monta o ZIP
+        class InlineThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with (
+            override_settings(OUTBOX_MODE='thread'),
+            mock.patch.object(zips.threading, 'Thread', InlineThread),
+            mock.patch.object(zips, 'close_old_connections') as closed,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.client.post(reverse('batch_zip_request', args=[self.batch.pk]))
+        self.assertEqual(ZipExport.objects.get().status, 'READY')
+        closed.assert_called_once()  # a linha de execução devolve a conexão ao terminar
+
+    def test_servico_so_de_zips_em_laco(self):
+        # o serviço zips do Docker (--so-zips --continuo) confere a fila a cada INTERVALO segundos
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from core.management.commands import process_outbox
+
+        class Stop(Exception):
+            pass
+
+        ZipExport.objects.create(batch=self.batch)
+        with (
+            mock.patch.object(process_outbox.time, 'sleep', side_effect=Stop) as slept,
+            mock.patch.object(process_outbox, 'close_old_connections'),
+            self.assertRaises(Stop),
+        ):
+            call_command('process_outbox', so_zips=True, continuo=True, intervalo=7, stdout=StringIO())
+        slept.assert_called_once_with(7)
+        self.assertEqual(ZipExport.objects.get().status, 'READY')
+
     def test_lote_pequeno_continua_direto(self):
         with mock.patch.object(zips, 'ZIP_DIRECT_LIMIT', 200):
             response = self.client.get(reverse('batch_zip', args=[self.batch.pk]))

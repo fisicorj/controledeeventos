@@ -1,0 +1,17 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if certificates|length > 1 %}Os seus certificados de "{{ activity.title }}" foram emitidos, um por sessão:{% else %}O seu certificado de "{{ activity.title }}" foi emitido:{% endif %}
+{% for certificate, verify_url in certificates %}
+- {{ certificate.activity_title }} ({{ certificate.start_date|date:'d/m/Y' }}{% if certificate.workload_hours %}, {{ certificate.workload_hours }} hora{{ certificate.workload_hours|pluralize }}{% endif %})
+  Código de validação: {{ certificate.code }}
+  Conferência: {{ verify_url }}
+{% endfor %}{% if survey_required %}
+Para liberar o download, responda antes a pesquisa de satisfação (menos de um minuto):
+{{ survey_url }}
+{% elif survey_invite %}
+Conte como foi o evento, com uma nota de 0 a 10 (menos de um minuto): {{ survey_url }}
+{% endif %}
+Baixe os PDFs em: {{ sessions_url }}
+
+{{ institution }}
+{% endautoescape %}

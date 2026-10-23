@@ -1,0 +1,7 @@
+{% if per_session %}
+Sessões que você escolheu:
+{% for e in chosen_sessions %}- {{ e.session.title }}: {{ e.session.start_at|date:'d/m/Y \à\s H:i' }}{% if e.status == 'WAITLISTED' %} (lista de espera){% endif %}
+{% empty %}- nenhuma ainda
+{% endfor %}Para escolher, trocar ou sair de uma sessão (até ela começar): {{ sessions_url }}
+O certificado é emitido por sessão, para cada sessão em que você tiver presença registrada.
+{% endif %}

@@ -35,9 +35,12 @@
                   {% elif i.is_open %}Aguardando (vence em {{ i.expires_at|date:'d/m/Y' }})
                   {% else %}<span class="text-secondary">Venceu</span>{% endif %}
                 </td>
-                <td class="text-end">
+                <td class="text-end text-nowrap">
+                  {% if not i.accepted_at and not i.cancelled_at %}
+                    <form method="post" action="{% url 'user_admin_invite_resend' i.pk %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Reenviar</button></form>
+                  {% endif %}
                   {% if i.is_open %}
-                    <form method="post" action="{% url 'user_admin_invite_cancel' i.pk %}" data-confirm="Cancelar o convite para {{ i.email }}? O link deixa de valer." data-confirm-label="Cancelar convite" data-confirm-danger>{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Cancelar</button></form>
+                    <form method="post" class="d-inline" action="{% url 'user_admin_invite_cancel' i.pk %}" data-confirm="Cancelar o convite para {{ i.email }}? O link deixa de valer." data-confirm-label="Cancelar convite" data-confirm-danger>{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Cancelar</button></form>
                   {% endif %}
                 </td>
               </tr>

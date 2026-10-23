@@ -10,6 +10,12 @@
     <a class="btn btn-outline-primary" href="{% url 'certificate_preview' %}" target="_blank"><i class="bi bi-award"></i>Pré-visualizar certificado</a>
   </div>
   {% include 'core/_tabs.html' with active='institution' %}
+  {% if needs_reauth %}
+    <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>Para salvar alterações aqui (nome, assinatura, arte do certificado), o portal pede a sua senha de novo. Confirme antes de editar, para não perder o que preencher.</span>
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'reauth' %}?next={{ request.path|urlencode }}">Confirmar identidade</a>
+    </div>
+  {% endif %}
 
   <form method="post" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
