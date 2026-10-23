@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import announcements, operations, reports, views
+from . import announcements, operations, reports, session_report, views
 
 urlpatterns = [
     path('', views.activity_list, name='activity_list'),
@@ -19,6 +19,10 @@ urlpatterns = [
         name='checkin_staff_remove',
     ),
     path('organizer/<int:activity_id>/sessions/new/', views.session_create, name='session_create'),
+    path('organizer/<int:pk>/sessoes/lembrar/', views.sessions_remind, name='sessions_remind'),
+    path('organizer/<int:activity_id>/inscritos/incluir/', views.participant_add, name='participant_add'),
+    path('organizer/<int:activity_id>/inscritos/lote/', views.participant_batch, name='participant_batch'),
+    path('organizer/inscricao/<int:pk>/', views.registration_admin, name='registration_admin'),
     path('organizer/sessions/<int:pk>/edit/', views.session_edit, name='session_edit'),
     path('organizer/sessions/<int:pk>/delete/', views.session_delete, name='session_delete'),
     path('organizer/<int:activity_id>/questions/new/', views.question_create, name='question_create'),
@@ -41,7 +45,14 @@ urlpatterns = [
     path('materiais/<int:pk>/', operations.material_open, name='material_open'),
     path('organizer/<int:pk>/duplicate/', operations.activity_duplicate, name='activity_duplicate'),
     path('organizer/<int:pk>/numeros/', operations.activity_stats, name='activity_stats'),
+    path('organizer/numeros/', operations.institution_panel, name='institution_panel'),
     path('organizer/<int:pk>/crachas/', operations.badges, name='activity_badges'),
+    path('organizer/sessao/<int:session_id>/relatorio/', session_report.session_report, name='session_report'),
+    path(
+        'organizer/sessao/<int:session_id>/relatorio/enviar/',
+        session_report.session_report_send,
+        name='session_report_send',
+    ),
     # Relatórios
     path('organizer/<int:pk>/export.csv', reports.registrations_csv, name='report_registrations_csv'),
     path('organizer/<int:pk>/frequencia.pdf', reports.attendance_pdf, name='report_attendance_pdf'),

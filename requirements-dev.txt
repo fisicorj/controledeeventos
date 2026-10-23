@@ -1,7 +1,11 @@
 ruff==0.16.10
-# Verifica dependências com vulnerabilidade conhecida (roda na CI): pip-audit -r requirements.lock
+# Verifica dependências com vulnerabilidade conhecida (roda na CI): pip-audit -r requirements.lock e -r requirements-dev.txt (separados)
 pip-audit==2.10.1
 # Cobertura dos testes (roda na CI; sem meta mínima, só para acompanhar): coverage run manage.py test && coverage report
 coverage==7.16.2
 # Gera o requirements.lock (versões com hash) a partir do requirements.txt; o comando está no início do lock
-uv==0.11.32
+uv==0.13.4
+# Testes de navegador (core/test_browser.py) e acessibilidade com o axe-core. Depois de instalar, baixe o navegador:
+# python -m playwright install chromium (sem ele, esses testes são pulados)
+playwright==1.56.0
+axe-playwright-python==0.1.8

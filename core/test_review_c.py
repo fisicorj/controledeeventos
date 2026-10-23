@@ -4,6 +4,7 @@ limite da imagem de capa e prazo para confirmar a vaga da lista de espera."""
 import io
 import json
 import logging
+import os
 import shutil
 import sys
 import tempfile
@@ -125,13 +126,14 @@ class CoverImageLimitTests(TestCase):
         activity = make_activity(org)
         self.client.force_login(org)
         buffer = io.BytesIO()
-        Image.new('RGB', (1500, 1200), (10, 20, 30)).save(buffer, 'BMP')  # ~5,4 MB sem compressão
+        # PNG de ruído (não comprime): ~5,4 MB. Só JPG, PNG e WebP são aceitos (core/images.py).
+        Image.frombytes('RGB', (1500, 1200), os.urandom(1500 * 1200 * 3)).save(buffer, 'PNG')
         a = activity
         data = {'title': a.title, 'description': a.description, 'activity_type': a.activity_type,
                 'start_date': local(a.start_date), 'end_date': local(a.end_date),
                 'registration_start': local(a.registration_start), 'registration_end': local(a.registration_end),
                 'capacity': a.capacity, 'status': a.status, 'min_attendance_percent': 75,
-                'image': SimpleUploadedFile('capa.bmp', buffer.getvalue(), 'image/bmp')}  # fmt: skip
+                'image': SimpleUploadedFile('capa.png', buffer.getvalue(), 'image/png')}  # fmt: skip
         response = self.client.post(reverse('activity_edit', args=[activity.id]), data)
         self.assertContains(response, 'no máximo 5 MB')
 

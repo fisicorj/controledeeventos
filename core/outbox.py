@@ -42,6 +42,7 @@ STALE_LOCK = timedelta(minutes=10)  # "enviando" há mais tempo que isso: o proc
 ATTACHMENT_BUILDERS = {
     'qr': 'registrations.notifications.qr_attachment',
     'ics': 'registrations.notifications.ics_attachment',
+    'my_ics': 'registrations.notifications.my_ics_attachment',
     'certificate_pdf': 'certificates.batch.pdf_attachment',
 }
 

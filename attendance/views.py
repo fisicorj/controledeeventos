@@ -18,6 +18,7 @@ from core.middleware import allow_camera
 from core.permissions import can_checkin, can_manage, is_platform_admin
 from registrations.models import Registration
 from registrations.qr import QR_PREFIX
+from registrations.sessions import session_registrations
 
 from .audit import record_removals
 from .models import Attendance, AttendanceRemoval
@@ -71,11 +72,8 @@ def session_attendance(request, session_id):
     session, allowed = get_managed_session(request, session_id)
     if not allowed:
         raise PermissionDenied('Acesso restrito.')
-    registrations = (
-        Registration.objects.filter(activity=session.activity, status=Registration.Status.CONFIRMED)
-        .select_related('user')
-        .order_by('user__first_name', 'user__username')
-    )
+    # Na atividade por sessão, só quem escolheu esta sessão (e está confirmado nela).
+    registrations = session_registrations(session).select_related('user').order_by('user__first_name', 'user__username')
     present = set(Attendance.objects.filter(session=session).values_list('registration_id', flat=True))
     return render(
         request,
@@ -85,10 +83,67 @@ def session_attendance(request, session_id):
             'registrations': registrations,
             'present': present,
             'removals': AttendanceRemoval.objects.filter(session_id=session.pk)[:50],
+            'waitlist': _session_waitlist(session),
             # A equipe de check-in não vê e-mails nem os atalhos da gestão.
             'can_manage_activity': can_manage(request.user, session.activity),
         },
     )
+
+
+def _session_waitlist(session):
+    """Fila da sessão (atividade por sessão), só para mostrar: quem está nela não pode ter presença ainda."""
+    if not session.activity.per_session:
+        return []
+    from registrations.models import SessionEnrollment
+
+    return (
+        SessionEnrollment.objects.filter(session=session, status=SessionEnrollment.Status.WAITLISTED)
+        .select_related('registration__user')
+        .order_by('waitlisted_at', 'id')
+    )
+
+
+@login_required
+@require_POST
+def walk_in_checkin(request, session_id):
+    """Inscrição na hora (M-06): quem chegou sem inscrição, pela conta do portal (usuário ou e-mail confirmado)."""
+    from django.db.models import Q
+
+    from accounts.models import User
+    from registrations import staff
+
+    session, allowed = get_managed_session(request, session_id)
+    if not allowed:
+        raise PermissionDenied('Acesso restrito.')
+    back = redirect('session_attendance', session_id=session.id)
+    typed = request.POST.get('person', '').strip()
+    person = (
+        User.objects.filter(Q(username__iexact=typed) | Q(email__iexact=typed, email_verified=True)).first()
+        if typed
+        else None
+    )
+    if person is None:
+        messages.error(
+            request,
+            f'Não encontrei uma conta com o usuário ou e-mail "{typed}". A pessoa cria a conta pelo celular (e '
+            'confirma o e-mail) e você tenta de novo.',
+        )
+        return back
+    activity = session.activity
+    category = activity.categories.filter(pk=request.POST.get('category') or 0).first()
+    if activity.categories.exists() and category is None:
+        messages.error(request, 'Escolha o tipo de vaga da pessoa.')
+        return back
+    try:
+        _, over = staff.walk_in(session, person, request.user, category, can_exceed=can_manage(request.user, activity))
+    except staff.Refused as exc:
+        messages.error(request, str(exc))
+        return back
+    text = f'{person.get_full_name() or person.username} foi inscrito e a presença foi registrada.'
+    if over:
+        text += ' A inscrição ficou acima das vagas.'
+    messages.success(request, text)
+    return back
 
 
 @login_required
@@ -96,9 +151,7 @@ def manual_checkin(request, session_id, registration_id):
     session, allowed = get_managed_session(request, session_id)
     if not allowed:
         raise PermissionDenied('Acesso restrito.')
-    registration = get_object_or_404(
-        Registration, pk=registration_id, activity=session.activity, status=Registration.Status.CONFIRMED
-    )
+    registration = get_object_or_404(session_registrations(session), pk=registration_id)
     blocked = activity_blocked(session, allow_finished=True)
     if blocked:
         messages.error(request, blocked)
@@ -148,6 +201,17 @@ def remove_checkin(request, session_id, registration_id):
         messages.info(request, f'A presença de {name} já não estava registrada.')
         return redirect('session_attendance', session_id=session.id)
     messages.success(request, f'Presença de {name} removida desta sessão.')
+    if session.activity.per_session:
+        certificate = Certificate.objects.filter(
+            session_enrollment__registration=registration, session_enrollment__session=session, revoked_at__isnull=True
+        ).first()
+        if certificate:
+            messages.warning(
+                request,
+                f'{name} já tem o certificado desta sessão ({certificate.code}). '
+                'Se ele não vale mais, revogue-o em "Gerenciar".',
+            )
+        return redirect('session_attendance', session_id=session.id)
     certificate = Certificate.objects.filter(registration=registration, revoked_at__isnull=True).first()
     if certificate:
         activity = session.activity
@@ -202,12 +266,12 @@ def qr_checkin(request, session_id):
         return JsonResponse({'ok': False, 'message': blocked}, status=400)
     if not session.check_in_open and not late_sync:
         return JsonResponse({'ok': False, 'message': 'Check-in desta sessão está fechado.'}, status=400)
-    registration = (
-        Registration.objects.filter(qr_token=token, activity=session.activity, status=Registration.Status.CONFIRMED)
-        .select_related('user')
-        .first()
-    )
+    registration = session_registrations(session).filter(qr_token=token).select_related('user').first()
     if not registration:
+        if session.activity.per_session and session.activity.registrations.filter(qr_token=token).exists():
+            return JsonResponse(
+                {'ok': False, 'message': 'Inscrito no evento, mas não está confirmado nesta sessão.'}, status=404
+            )
         return JsonResponse({'ok': False, 'message': 'Inscrição não encontrada para esta atividade.'}, status=404)
     _, created = Attendance.objects.get_or_create(
         registration=registration,
@@ -239,9 +303,11 @@ def _token_key(token):
     return str(token).replace('-', '')[:12]
 
 
-@login_required
-def checkin_home(request):
-    """Tela inicial do app: sessões que o usuário pode controlar, das mais próximas para as mais distantes."""
+NOW_BEFORE, NOW_AFTER = timedelta(hours=1), timedelta(hours=1)  # janela de "acontecendo agora"
+
+
+def _checkin_sessions(request):
+    """Sessões que a pessoa pode controlar, das últimas 12 horas em diante (organização, equipe ou admin)."""
     from django.db.models import Q
 
     is_team = request.user.checkin_activities.exists()
@@ -253,7 +319,32 @@ def checkin_home(request):
     ).select_related('activity')
     if not is_platform_admin(request.user):
         sessions = sessions.filter(Q(activity__organizer=request.user) | Q(activity__checkin_staff=request.user))
-    sessions = sessions.distinct().order_by('start_at')[:30]
+    return now, sessions.distinct()
+
+
+def _is_now(session, now):
+    return session.start_at - NOW_BEFORE <= now <= session.end_at + NOW_AFTER
+
+
+@login_required
+def checkin_quick(request):
+    """Atalho do celular ("Ler QR Code"): com uma sessão acontecendo agora, abre o leitor dela direto;
+    com várias (ou nenhuma), abre a lista para escolher."""
+    now, sessions = _checkin_sessions(request)
+    current = [s for s in sessions.filter(start_at__lte=now + NOW_BEFORE, end_at__gte=now - NOW_AFTER)]
+    if len(current) == 1:
+        return redirect('checkin_app', session_id=current[0].pk)
+    return redirect('checkin_home')
+
+
+@login_required
+def checkin_home(request):
+    """Tela inicial do app: sessões que o usuário pode controlar; as que estão acontecendo agora vêm primeiro."""
+    now, sessions = _checkin_sessions(request)
+    sessions = list(sessions.order_by('start_at')[:30])
+    for session in sessions:
+        session.is_now = _is_now(session, now)
+    sessions.sort(key=lambda s: (not s.is_now, s.start_at))
     return render(
         request,
         'attendance/app_home.html',
@@ -284,9 +375,7 @@ def checkin_roster(request, session_id):
             'name': r.user.get_full_name() or r.user.username,
             'present': r.id in present,
         }
-        for r in Registration.objects.filter(activity=session.activity, status=Registration.Status.CONFIRMED)
-        .select_related('user')
-        .order_by('user__first_name', 'user__username')
+        for r in session_registrations(session).select_related('user').order_by('user__first_name', 'user__username')
     ]
     return JsonResponse(
         {
@@ -318,7 +407,9 @@ def checkin_manifest(request):
     data = {
         'name': f'Check-in {site.portal_name}',
         'short_name': 'Check-in',
-        'start_url': reverse('checkin_home'),
+        'start_url': reverse('checkin_quick'),
+        # Atalho no ícone do app (toque longo, Android): abre o leitor da sessão que está acontecendo agora.
+        'shortcuts': [{'name': 'Ler QR Code', 'short_name': 'Ler QR', 'url': reverse('checkin_quick')}],
         'scope': '/attendance/',
         'display': 'standalone',
         'orientation': 'portrait',

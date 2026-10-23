@@ -9,16 +9,22 @@
   <div class="alert alert-info">
     O check-in de todas as sessões será fechado e a atividade sai do catálogo.
     {% if activity.certificate_enabled %}
-      {% if sessions %}
+      {% if sessions and activity.per_session %}
+        Certificado por sessão: pelas presenças atuais, saem <strong>{{ eligible }}</strong> certificado{{ eligible|pluralize }} (um para cada sessão escolhida em que a pessoa teve presença), avisados por e-mail.
+      {% elif sessions %}
         Pela frequência atual, <strong>{{ eligible }} de {{ total }}</strong> inscrito{{ total|pluralize }} atinge{{ eligible|pluralize:",m" }} o mínimo de {{ activity.min_attendance_percent }}% e recebe{{ eligible|pluralize:",m" }} o certificado por e-mail.
       {% else %}
         Como a atividade não tem sessões, não há frequência e nenhum certificado será emitido.
       {% endif %}
     {% endif %}
   </div>
+  {% if activity.certificate_enabled and speakers or activity.certificate_enabled and works %}
+    <p>Também saem {% if speakers %}<strong>{{ speakers }}</strong> certificado{{ speakers|pluralize }} de palestrante{% endif %}{% if speakers and works %} e {% endif %}{% if works %}<strong>{{ works }}</strong> de apresentação de trabalho{% endif %}, enviados por e-mail a quem tem endereço cadastrado.</p>
+  {% endif %}
   {% if activity.certificate_enabled and sessions %}
     <p class="small text-secondary">Se alguma presença for lançada depois, use "Emitir certificados pendentes" na tela de gestão.</p>
   {% endif %}
+  {% if activity.certificate_enabled %}{% include 'core/_provisional_url.html' %}{% endif %}
   <form method="post" class="d-flex gap-2 mt-3">
     {% csrf_token %}
     <button class="btn btn-primary">Finalizar{% if activity.certificate_enabled and eligible %} e emitir certificados{% endif %}</button>

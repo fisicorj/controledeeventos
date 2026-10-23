@@ -113,6 +113,12 @@
             </select>
           </div>
           <button class="btn btn-outline-primary"><i class="bi bi-arrow-left-right"></i>Transferir</button>
+          <fieldset class="w-100 small mt-1">
+            <legend class="fs-6 mb-1">Quem assina os certificados das atividades que ainda não terminaram?</legend>
+            <div class="form-check"><input class="form-check-input" type="radio" name="assinatura" id="sig-old" value="antiga" checked><label class="form-check-label" for="sig-old">Continua {{ person.get_full_name|default:person.username }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="assinatura" id="sig-new" value="nova"><label class="form-check-label" for="sig-new">Passa a ser quem recebe</label></div>
+            <div class="text-secondary mt-1">Só vale quando a instituição não tem signatário próprio (Configurações). Atividades finalizadas e emissões avulsas mantêm sempre a assinatura original.</div>
+          </fieldset>
         </form>
       {% else %}
         <p class="small mb-0">Não há outra conta de organizador ou administrador ativa para receber.</p>

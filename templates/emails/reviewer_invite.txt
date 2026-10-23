@@ -1,0 +1,11 @@
+{% autoescape off %}Olá.
+
+{{ inviter }} convidou você para avaliar trabalhos da chamada de "{{ activity.title }}".
+
+Para aceitar, abra o link abaixo. Você cria a sua conta no portal (ou entra com uma que já tenha) e passa a fazer parte dos avaliadores. O link vale {{ days }} dias e só pode ser usado uma vez:
+{{ url }}
+
+Se não esperava este convite, ignore este e-mail.
+
+{{ institution }}
+{% endautoescape %}

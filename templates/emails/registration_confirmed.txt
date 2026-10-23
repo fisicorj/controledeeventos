@@ -2,7 +2,7 @@
 
 Sua inscrição está confirmada:
 
-{% include 'emails/_activity_info.txt' %}
+{% include 'emails/_activity_info.txt' %}{% include 'emails/_sessions.txt' %}
 O seu QR Code segue anexo a este e-mail, junto com o arquivo de agenda (.ics): abra-o para adicionar a atividade ao seu calendário. Apresente-o no credenciamento e na presença de cada sessão.
 Ele também fica disponível em "Minhas inscrições": {{ my_registrations_url }}
 

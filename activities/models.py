@@ -76,6 +76,30 @@ class Activity(models.Model):
     workload_hours = models.PositiveSmallIntegerField(
         'Carga horária (horas)', null=True, blank=True, help_text='Aparece no certificado. Opcional.'
     )
+    # Inscrição por sessão (registrations/sessions.py): a inscrição continua sendo no evento, com as vagas dele,
+    # mas a pessoa escolhe as sessões, cada sessão tem as suas vagas e o certificado sai por sessão.
+    per_session = models.BooleanField(
+        'Escolha de sessões e certificado por sessão',
+        default=False,
+        help_text='O participante se inscreve no evento e escolhe as sessões que vai assistir. Cada sessão tem as '
+        'suas vagas (com lista de espera) e o certificado é emitido por sessão, para quem teve presença nela.',
+    )
+    speaker_certificate = models.BooleanField(
+        'Certificado para palestrantes',
+        default=True,
+        help_text='Ao finalizar, cada palestrante cadastrado recebe um certificado, com as sessões em que falou.',
+    )
+    presenter_certificate = models.BooleanField(
+        'Certificado de apresentação de trabalho',
+        default=True,
+        help_text='Ao finalizar, o autor de cada trabalho aprovado na chamada recebe o certificado de apresentação.',
+    )
+    presenter_requires_attendance = models.BooleanField(
+        'Só com presença do autor',
+        default=False,
+        help_text='O certificado de apresentação sai só se o autor teve presença registrada na sessão do trabalho '
+        '(ou, sem sessão definida, em alguma sessão do evento).',
+    )
     min_attendance_percent = models.PositiveSmallIntegerField(
         'Frequência mínima para certificado (%)',
         default=75,
@@ -199,6 +223,16 @@ class Session(models.Model):
     location = models.CharField(max_length=200, blank=True)
     check_in_open = models.BooleanField(default=False)
     speakers = models.ManyToManyField('Speaker', blank=True, related_name='sessions', verbose_name='Palestrantes')
+    # Só na atividade com inscrição por sessão (Activity.per_session).
+    capacity = models.PositiveIntegerField(
+        'Vagas da sessão', null=True, blank=True, help_text='Obrigatório quando os participantes escolhem as sessões.'
+    )
+    workload_hours = models.PositiveSmallIntegerField(
+        'Carga horária do certificado (horas)',
+        null=True,
+        blank=True,
+        help_text='Só no certificado por sessão. Em branco: a duração da sessão, arredondada (mínimo 1 hora).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -208,6 +242,16 @@ class Session(models.Model):
     def __str__(self):
         return f'{self.activity.title} - {self.title}'
 
+    @property
+    def certificate_hours(self):
+        """Carga horária do certificado da sessão: a informada ou a duração arredondada (mínimo 1 hora)."""
+        if self.workload_hours:
+            return self.workload_hours
+        return max(1, round((self.end_at - self.start_at).total_seconds() / 3600))
+
+    def overlaps(self, other):
+        return self.start_at < other.end_at and other.start_at < self.end_at
+
     def clean(self):
         errors = {}
         if self.start_at and self.end_at and self.end_at <= self.start_at:
@@ -216,6 +260,8 @@ class Session(models.Model):
             activity = self.activity
         except Activity.DoesNotExist:
             activity = None
+        if activity is not None:
+            errors.update(self._capacity_errors(activity))
         if activity and activity.start_date and activity.end_date:
             if self.start_at and self.start_at < activity.start_date:
                 errors['start_at'] = (
@@ -227,6 +273,19 @@ class Session(models.Model):
                 )
         if errors:
             raise ValidationError(errors)
+
+    def _capacity_errors(self, activity):
+        if not activity.per_session:
+            return {}
+        if self.capacity is None:
+            return {'capacity': 'Informe as vagas: nesta atividade os participantes escolhem as sessões.'}
+        if activity.capacity is not None and self.capacity > activity.capacity:
+            return {'capacity': f'Não pode passar das vagas da atividade ({activity.capacity}).'}
+        if self.pk:
+            taken = self.enrollments.filter(status='CONFIRMED').count()
+            if self.capacity < taken:
+                return {'capacity': f'Já há {taken} participantes confirmados nesta sessão.'}
+        return {}
 
 
 class RegistrationQuestion(models.Model):
@@ -270,6 +329,12 @@ class Speaker(models.Model):
     bio = models.TextField('Minibio', blank=True, max_length=600)
     photo = models.ImageField('Foto', upload_to='speakers/', blank=True, null=True)
     link = models.URLField('Link', blank=True, help_text='LinkedIn, Lattes ou site pessoal. Opcional.')
+    # Para o certificado de palestrante: o e-mail recebe o PDF (e, se for de uma conta confirmada, o certificado
+    # aparece em "Minhas horas"); o documento sai no certificado. Não aparecem na página do evento.
+    email = models.EmailField('E-mail', blank=True, help_text='Opcional. Recebe o certificado de palestrante.')
+    document = models.CharField(
+        'CPF ou matrícula', max_length=50, blank=True, help_text='Opcional. Aparece no certificado de palestrante.'
+    )
     order = models.PositiveSmallIntegerField('Ordem', default=0)
 
     class Meta:

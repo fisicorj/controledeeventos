@@ -31,11 +31,20 @@ SESSION_KEY = 'mfa_verified_user'
 
 
 def applies_to(user):
-    """Contas com poder sobre dados de terceiros: administradores, organizadores e acesso ao painel /admin/."""
-    return bool(
-        user.is_authenticated
-        and (user.is_superuser or user.is_staff or user.role in (User.Role.ADMIN, User.Role.ORGANIZER))
-    )
+    """Contas com poder sobre dados de terceiros: administradores, organizadores, acesso ao painel /admin/ e
+    quem coordena alguma chamada de trabalhos (vê os autores, baixa os arquivos e decide os trabalhos)."""
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or user.role in (User.Role.ADMIN, User.Role.ORGANIZER):
+        return True
+    return coordinates_call(user)
+
+
+def coordinates_call(user):
+    """Guardado no objeto: o middleware pergunta a cada requisição."""
+    if not hasattr(user, '_coordinates_call'):
+        user._coordinates_call = user.coordinated_calls.exists()
+    return user._coordinates_call
 
 
 def device_for(user):

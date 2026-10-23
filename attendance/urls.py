@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path('', views.checkin_home, name='checkin_home'),
+    path('agora/', views.checkin_quick, name='checkin_quick'),
     path('manifest.webmanifest', views.checkin_manifest, name='checkin_manifest'),
     path('sw.js', views.checkin_service_worker, name='checkin_sw'),
     path('session/<int:session_id>/app/', views.checkin_app, name='checkin_app'),
@@ -14,4 +15,5 @@ urlpatterns = [
     path('session/<int:session_id>/remover/<int:registration_id>/', views.remove_checkin, name='remove_checkin'),
     path('session/<int:session_id>/abrir-fechar/', views.toggle_checkin, name='toggle_checkin'),
     path('session/<int:session_id>/scan/', views.qr_checkin, name='qr_checkin'),
+    path('session/<int:session_id>/na-hora/', views.walk_in_checkin, name='walk_in_checkin'),
 ]

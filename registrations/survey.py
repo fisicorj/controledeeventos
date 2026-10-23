@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from activities.models import Activity
 from core.csvsafe import excel_writer
 
-from .models import Registration, SurveyResponse
+from .models import Registration, SessionRating, SurveyResponse
 
 
 class SurveyForm(forms.ModelForm):
@@ -29,6 +29,39 @@ class SurveyForm(forms.ModelForm):
         labels = {'comment': 'Quer comentar algo? O que foi bom e o que podemos melhorar (opcional)'}
         widgets = {'comment': forms.Textarea(attrs={'rows': 4})}
 
+    def __init__(self, *args, sessions=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        # Modo por sessão (M-08): uma nota opcional para cada sessão em que a pessoa esteve.
+        self.sessions = list(sessions)
+        for session in self.sessions:
+            self.fields[f's{session.pk}'] = forms.TypedChoiceField(
+                label=f'Nota para "{session.title}"',
+                choices=[('', 'Sem nota')] + [(n, str(n)) for n in range(11)],
+                coerce=int,
+                empty_value=None,
+                required=False,
+            )
+            self.fields[f'c{session.pk}'] = forms.CharField(
+                label=f'Comentário sobre "{session.title}"',
+                required=False,
+                max_length=1000,
+                widget=forms.Textarea(attrs={'rows': 2}),
+            )
+
+    def session_fields(self):
+        return [(session, self[f's{session.pk}'], self[f'c{session.pk}']) for session in self.sessions]
+
+    def save_ratings(self, response):
+        for session in self.sessions:
+            score = self.cleaned_data.get(f's{session.pk}')
+            if score is not None:
+                SessionRating.objects.create(
+                    response=response,
+                    session=session,
+                    score=score,
+                    comment=(self.cleaned_data.get(f'c{session.pk}') or '').strip(),
+                )
+
 
 def eligible(activity):
     """Quem pode responder: confirmados que participaram (com presença, quando há sessões)."""
@@ -36,6 +69,28 @@ def eligible(activity):
     if activity.sessions.exists():
         qs = qs.annotate(n=Count('attendances')).filter(n__gt=0)
     return qs
+
+
+def attended_sessions(registration):
+    """Sessões com presença da pessoa, para a nota por sessão (só no modo por sessão)."""
+    if not registration.activity.per_session:
+        return []
+    from activities.models import Session
+
+    return list(Session.objects.filter(attendances__registration=registration).distinct().order_by('start_at'))
+
+
+def session_summary(session):
+    """Notas de uma sessão (M-08): quantas, média e comentários (ordenados pela nota, sem identificar ninguém)."""
+    ratings = list(SessionRating.objects.filter(session=session))
+    if not ratings:
+        return {'session': session, 'count': 0}
+    return {
+        'session': session,
+        'count': len(ratings),
+        'average': round(sum(r.score for r in ratings) / len(ratings), 1),
+        'comments': sorted((r for r in ratings if r.comment.strip()), key=lambda r: (r.score, r.comment.lower())),
+    }
 
 
 def survey_open(activity):
@@ -65,13 +120,14 @@ def survey(request, pk):
     if existing:
         messages.info(request, 'Você já respondeu a pesquisa desta atividade. Obrigado!')
         return redirect('my_registrations')
-    form = SurveyForm(request.POST if request.method == 'POST' else None)
+    form = SurveyForm(request.POST if request.method == 'POST' else None, sessions=attended_sessions(registration))
     if form.is_valid():
         response = form.save(commit=False)
         response.registration = registration
         try:
             with transaction.atomic():
                 response.save()
+                form.save_ratings(response)
         except IntegrityError:  # duplo clique: a primeira resposta já foi gravada
             messages.info(request, 'Você já respondeu a pesquisa desta atividade. Obrigado!')
             return redirect('my_registrations')
@@ -88,8 +144,10 @@ def summary(activity):
     responses = list(SurveyResponse.objects.filter(registration__activity=activity).order_by('-created_at'))
     total = len(responses)
     invited = eligible(activity).count()
+    sessions = [session_summary(s) for s in activity.sessions.order_by('start_at')] if activity.per_session else []
+    sessions = [s for s in sessions if s['count']]
     if not total:
-        return {'total': 0, 'invited': invited, 'pending': invited}
+        return {'total': 0, 'invited': invited, 'pending': invited, 'sessions': sessions}
     scores = [r.score for r in responses]
     promoters = sum(1 for s in scores if s >= 9)
     detractors = sum(1 for s in scores if s <= 6)
@@ -108,6 +166,7 @@ def summary(activity):
         'bars': [{'score': n, 'count': c, 'height': round(c * 100 / peak)} for n, c in enumerate(distribution)],
         # Ordenados pela nota (e não pela hora da resposta): em turma pequena, a hora identificaria quem respondeu.
         'comments': sorted((r for r in responses if r.comment.strip()), key=lambda r: (r.score, r.comment.lower())),
+        'sessions': sessions,
     }
 
 
@@ -130,6 +189,12 @@ def survey_csv(request, activity_id):
     writer.writerow(['Data', 'Nota', 'Comentário'])
     for r in SurveyResponse.objects.filter(registration__activity=activity).order_by('score', 'comment'):
         writer.writerow([timezone.localtime(r.created_at).strftime('%d/%m/%Y'), r.score, r.comment])
+    ratings = SessionRating.objects.filter(session__activity=activity).select_related('session')
+    if ratings.exists():
+        writer.writerow([])
+        writer.writerow(['Sessão', 'Nota', 'Comentário'])
+        for r in ratings.order_by('session__start_at', 'score', 'comment'):
+            writer.writerow([r.session.title, r.score, r.comment])
     return response
 
 

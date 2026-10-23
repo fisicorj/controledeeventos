@@ -7,6 +7,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from accounts.models import User
 from accounts.reauth import require_recent_auth
 from core.permissions import can_manage, can_manage_batch
 
@@ -21,14 +22,25 @@ FIELDS = ['participant_name', 'participant_document']
 def _load(request, code):
     """Certificado que o usuário pode gerenciar e o endereço para onde voltar."""
     certificate = get_object_or_404(
-        Certificate.objects.select_related('registration__activity', 'registration__user', 'batch'), code=code
+        Certificate.objects.select_related(
+            'registration__activity',
+            'registration__user',
+            'session_enrollment__registration__activity',
+            'session_enrollment__registration__user',
+            'speaker__activity',
+            'submission__call__activity',
+            'submission__author',
+            'batch',
+        ),
+        code=code,
     )
     if certificate.batch_id:
         allowed = can_manage_batch(request.user, certificate.batch)
         back = reverse('batch_detail', args=[certificate.batch_id])
     else:
-        allowed = can_manage(request.user, certificate.registration.activity)
-        back = reverse('activity_manage', args=[certificate.registration.activity_id])
+        activity = certificate.source_activity
+        allowed = can_manage(request.user, activity)
+        back = reverse('activity_manage', args=[activity.pk])
     if not allowed:
         raise PermissionDenied('Acesso restrito.')
     return certificate, back
@@ -47,7 +59,7 @@ def certificate_revoke(request, code):
         messages.success(request, f'Certificado de {certificate.participant_name} ({certificate.code}) revogado.')
         return redirect(back)
     consequence = 'O certificado continua guardado, mas não pode mais ser baixado.'
-    if certificate.registration_id:
+    if not certificate.batch_id:
         consequence += ' Ele não é emitido de novo automaticamente para esta inscrição.'
     return render(
         request,
@@ -55,7 +67,7 @@ def certificate_revoke(request, code):
         {
             'form': form,
             'heading': 'Revogar certificado',
-            'subject': f'{certificate.participant_name} · {certificate.code} · {certificate.activity_title}',
+            'subject': f'{certificate.participant_name} · {certificate.code} · {certificate.full_title}',
             'consequence': consequence,
             'button': 'Revogar certificado',
             'back_url': back,
@@ -74,8 +86,15 @@ def certificate_correct(request, code):
         messages.error(request, 'Esta emissão foi cancelada e não pode mais ser alterada.')
         return redirect(back)
     profile = None
-    if certificate.registration_id:
-        user = certificate.registration.user
+    owner = certificate.owner_registration
+    user = owner.user if owner else None
+    if certificate.submission_id:
+        user = (
+            User.objects.filter(email__iexact=certificate.coauthor_email, email_verified=True).first()
+            if certificate.coauthor_email
+            else certificate.submission.author
+        )
+    if user:
         profile = {
             'participant_name': user.get_full_name() or user.username,
             'participant_document': user.institutional_id,

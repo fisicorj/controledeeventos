@@ -16,7 +16,7 @@ from core.models import SiteSettings
 from registrations.models import Registration, RegistrationAnswer, SurveyResponse
 
 from .models import Activity, Material, RegistrationQuestion, Speaker, SpotCategory
-from .operations import _next_title, duplicate_activity
+from .operations.duplication import _next_title, duplicate_activity
 from .test_utils import make_activity, make_session, make_user, now
 
 EMAIL = 'django.core.mail.backends.locmem.EmailBackend'

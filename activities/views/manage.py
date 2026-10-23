@@ -10,11 +10,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from accounts.models import User
 from attendance.summary import participation
 from certificates.models import Certificate
+from certificates.roles import role_certificates
 from certificates.services import finish_activity, issue_certificates
 from core.pagination import paginate, semester_choices, semester_range
 from core.permissions import activities_for, can_manage
 from registrations import notifications, services, survey
+from registrations import sessions as session_room
 from registrations.models import Registration
+from submissions.models import Submission
 
 from ..forms import NOTIFY_FIELDS, ActivityForm
 from ..models import Activity
@@ -106,6 +109,12 @@ def activity_edit(request, pk):
                 if promoted:
                     messages.info(request, f'{len(promoted)} pessoa(s) da lista de espera foram confirmadas.')
         messages.success(request, 'Atividade atualizada.')
+        if getattr(form, 'sessions_filled', 0):
+            messages.info(
+                request,
+                f'{form.sessions_filled} sessão(ões) sem vagas definidas ficaram com as vagas do evento '
+                f'({activity.capacity}). Ajuste em cada sessão, se precisar.',
+            )
         return redirect('organizer_dashboard')
     return render(
         request,
@@ -143,10 +152,10 @@ def activity_delete(request, pk):
     activity = get_object_or_404(Activity, pk=pk)
     if not can_manage(request.user, activity):
         raise PermissionDenied('Acesso restrito.')
-    if activity.registrations.exists():
+    if activity.registrations.exists() or Submission.objects.filter(call__activity=activity).exists():
         messages.error(
             request,
-            'Esta atividade já possui inscrições e não pode ser excluída. '
+            'Esta atividade já possui inscrições ou trabalhos enviados e não pode ser excluída. '
             'Use "Cancelar" para encerrá-la preservando o histórico.',
         )
         return redirect('organizer_dashboard')
@@ -212,10 +221,24 @@ def activity_finish(request, pk):
         return redirect('activity_manage', pk=activity.pk)
     sessions, rows = participation(activity)
     eligible = sum(1 for r in rows if r.percent >= activity.min_attendance_percent) if sessions else 0
+    if activity.per_session:
+        _per_session_rows(activity, sessions, rows)
+        eligible = sum(row.attended for row in rows)
+    from submissions.models import Submission as Work
+
     return render(
         request,
         'organizer/confirm_finish.html',
-        {'activity': activity, 'sessions': sessions, 'total': len(rows), 'eligible': eligible},
+        {
+            'activity': activity,
+            'sessions': sessions,
+            'total': len(rows),
+            'eligible': eligible,
+            'speakers': activity.speakers.count() if activity.speaker_certificate else 0,
+            'works': Work.objects.filter(call__activity=activity, status=Work.Status.ACCEPTED).count()
+            if activity.presenter_certificate
+            else 0,
+        },
     )
 
 
@@ -235,7 +258,7 @@ def certificates_issue(request, pk):
 
 @login_required
 def activity_manage(request, pk):
-    activity = get_object_or_404(Activity.objects.prefetch_related('sessions'), pk=pk)
+    activity = get_object_or_404(Activity.objects.prefetch_related('sessions').select_related('call_for_papers'), pk=pk)
     if not can_manage(request.user, activity):
         raise PermissionDenied('Acesso restrito.')
     # Frequência calculada em consultas fixas (antes era uma consulta por inscrito).
@@ -244,6 +267,9 @@ def activity_manage(request, pk):
     for row in rows:
         row.certificate = certificates.get(row.registration.id)
         row.certified = row.certificate is not None and not row.certificate.is_revoked
+    certified_count = sum(1 for c in certificates.values() if not c.is_revoked)
+    if activity.per_session:
+        certified_count = _per_session_rows(activity, sessions, rows)
     waitlist = (
         activity.registrations.filter(status=Registration.Status.WAITLISTED)
         .select_related('user')
@@ -258,7 +284,10 @@ def activity_manage(request, pk):
             'session_count': len(sessions),
             'waitlist': waitlist,
             'questions': activity.questions.all(),
-            'certified_count': sum(1 for c in certificates.values() if not c.is_revoked),
+            'certified_count': certified_count,
+            'session_list': session_room.with_room(activity, sessions),
+            'role_certificates': role_certificates(activity) if activity.certificate_enabled else [],
+            'without_sessions': _without_sessions(activity).count() if activity.per_session else 0,
             'speakers': activity.speakers.all(),
             'categories': categories_with_counts(activity),
             'materials': activity.materials.all(),
@@ -268,6 +297,52 @@ def activity_manage(request, pk):
             'survey_open': survey.survey_open(activity),
         },
     )
+
+
+def _per_session_rows(activity, sessions, rows):
+    """Atividade por sessão: em cada linha, as sessões escolhidas, as presenças nelas e os certificados.
+    Devolve quantos certificados válidos há."""
+    from registrations.models import SessionEnrollment
+
+    chosen = {}
+    for registration_id, session_id in SessionEnrollment.objects.filter(
+        session__activity=activity, status=SessionEnrollment.Status.CONFIRMED
+    ).values_list('registration_id', 'session_id'):
+        chosen.setdefault(registration_id, set()).add(session_id)
+    by_registration = {}
+    for c in (
+        Certificate.objects.filter(session_enrollment__session__activity=activity)
+        .select_related('session_enrollment')
+        .order_by('start_date')
+    ):
+        by_registration.setdefault(c.session_enrollment.registration_id, []).append(c)
+    for row in rows:
+        mine = chosen.get(row.registration.id, set())
+        row.chosen = len(mine)
+        row.attended = sum(1 for session, mark in zip(sessions, row.marks, strict=True) if mark and session.pk in mine)
+        row.session_certificates = by_registration.get(row.registration.id, [])
+    return sum(1 for items in by_registration.values() for c in items if not c.is_revoked)
+
+
+def _without_sessions(activity):
+    """Inscritos confirmados que ainda não escolheram nenhuma sessão (atividade por sessão)."""
+    return activity.registrations.filter(status=Registration.Status.CONFIRMED, offer_expires_at__isnull=True).exclude(
+        session_enrollments__status__in=session_room.ACTIVE
+    )
+
+
+@login_required
+def sessions_remind(request, pk):
+    """Avisa por e-mail quem está inscrito e ainda não escolheu sessões (sem sessão, não há certificado)."""
+    activity = get_object_or_404(Activity, pk=pk)
+    if not can_manage(request.user, activity):
+        raise PermissionDenied('Acesso restrito.')
+    if request.method == 'POST' and activity.per_session and activity.status == Activity.Status.PUBLISHED:
+        people = list(_without_sessions(activity).select_related('user', 'activity'))
+        with transaction.atomic():
+            notifications.notify_choose_sessions(people)
+        messages.success(request, f'{len(people)} inscrito(s) avisado(s) por e-mail para escolher as sessões.')
+    return redirect('activity_manage', pk=activity.pk)
 
 
 @login_required

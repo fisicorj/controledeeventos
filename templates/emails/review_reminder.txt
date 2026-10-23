@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if items|length == 1 %}Há uma avaliação esperando por você{% else %}Há {{ items|length }} avaliações esperando por você{% endif %}:
+{% for item in items %}
+- {{ item.review.submission.title }} ({{ item.review.submission.call.activity.title }}){% if item.review.due_at %}: {% if item.overdue %}o prazo terminou em{% else %}prazo até{% endif %} {{ item.review.due_at|date:'d/m/Y H:i' }}{% endif %}
+  {{ item.url }}{% endfor %}
+
+Todos os trabalhos designados para você: {{ reviews_url }}
+Se não puder avaliar, avise a organização do evento para que ela designe outra pessoa.
+
+{{ institution }}
+{% endautoescape %}

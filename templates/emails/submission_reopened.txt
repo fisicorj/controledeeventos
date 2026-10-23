@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+A organização de "{{ activity.title }}" reabriu a avaliação do seu trabalho "{{ submission.title }}". A decisão anterior não vale mais; você recebe um novo e-mail quando sair a decisão.
+{% if note %}
+Motivo:
+{{ note }}
+{% endif %}
+Acompanhe em: {{ submission_url }}
+
+{{ institution }}
+{% endautoescape %}

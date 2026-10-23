@@ -66,7 +66,7 @@ def _semester_table(items, hours, st, brand):
     rows = [['Atividade', 'Tipo', 'Data', 'Horas', 'Código']]
     for c in items:
         rows.append([
-            Paragraph(escape(c.activity_title) + (' *' if c.claimed_by_id else ''), st['cell']),
+            Paragraph(escape(c.full_title) + (' *' if c.claimed_by_id else ''), st['cell']),
             Paragraph(escape(c.activity_type), st['cell']),
             c.certificate_date.strftime('%d/%m/%Y'),
             f'{c.workload_hours} h' if c.workload_hours else '-',
@@ -106,7 +106,7 @@ def record(user, semesters, semester=''):
 
     items = [
         {
-            'codigo': c.code, 'atividade': c.activity_title, 'tipo': c.activity_type,
+            'codigo': c.code, 'atividade': c.full_title, 'tipo': c.activity_type,
             'data': c.certificate_date.isoformat(), 'horas': c.workload_hours or 0, 'vinculado': bool(c.claimed_by_id),
         }
         for _, certificates, _ in semesters

@@ -91,6 +91,29 @@ def period_phrase(start, end):
     return f'de {_day(s)} de {MONTHS[s.month - 1]} de {s.year} a {_day(e)} de {MONTHS[e.month - 1]} de {e.year}'
 
 
+def _opening_lines(certificate):
+    """Primeiras linhas do corpo: o que a pessoa fez (participou, falou, apresentou)."""
+    title, event, detail = certificate.activity_title, certificate.event_title, certificate.role_detail
+    if certificate.role == 'SPEAKER':
+        lines = [[('atuou como palestrante em “', False), (title, True), ('”,', False)]]
+        if detail:
+            many = '” e “' in detail or '”, “' in detail
+            lines.append([(f'{"nas sessões" if many else "na sessão"} {detail},', False)])
+        return lines
+    if certificate.role == 'PRESENTER':
+        lines = [[('apresentou o trabalho “', False), (title, True), ('”,', False)]]
+        if detail:
+            lines.append([(f'de autoria de {detail},', False)])
+        lines.append([('no evento “', False), (event, True), ('”,', False)])
+        return lines
+    if event:  # certificado por sessão: a sessão e, abaixo, o evento
+        return [
+            [('participou da sessão “', False), (title, True), ('”,', False)],
+            [('do evento “', False), (event, True), ('”,', False)],
+        ]
+    return [[('participou do “', False), (title, True), ('”,', False)]]
+
+
 def certificate_text(certificate, site):
     """Textos do certificado. O corpo é uma lista de linhas; cada linha é uma lista de trechos
     (texto, negrito). Mantém as quebras do modelo: título / local / período e duração."""
@@ -99,7 +122,7 @@ def certificate_text(certificate, site):
     if hours:
         tail += f', com duração de {hours} hora{"s" if hours != 1 else ""}'
     tail += '.'
-    body = [[('participou do “', False), (certificate.activity_title, True), ('”,', False)]]
+    body = _opening_lines(certificate)
     place = site.certificate_place.strip().rstrip(',')
     if place:
         body.append([(f'realizado {place},', False)])

@@ -4,7 +4,7 @@
 <main class="container" style="max-width:720px">
   <div class="panel panel-body my-5">
     <h1 class="h2">Corrigir certificado</h1>
-    <p class="mb-2"><strong>{{ certificate.activity_title }}</strong> · <span class="tabular">{{ certificate.code }}</span></p>
+    <p class="mb-2"><strong>{{ certificate.full_title }}</strong> · <span class="tabular">{{ certificate.code }}</span></p>
     <dl class="row small mb-3">
       <dt class="col-sm-4">No certificado hoje</dt>
       <dd class="col-sm-8">{{ certificate.participant_name }}{% if certificate.participant_document %} · {{ certificate.participant_document }}{% endif %}</dd>

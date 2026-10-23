@@ -118,3 +118,27 @@ class MaintenancePanelTests(TestCase):
         page = self.client.get(self.url)
         self.assertContains(page, 'Faxina em andamento')
         self.assertContains(page, 'interrompida')
+
+    def test_rodar_agora_sem_worker_usa_linha_de_execucao(self):
+        # OUTBOX_MODE=thread: a faxina pedida roda numa linha de execução do próprio servidor
+        from unittest import mock
+
+        class InlineThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with (
+            override_settings(OUTBOX_MODE='thread'),
+            mock.patch('threading.Thread', InlineThread),
+            mock.patch('django.db.close_old_connections') as closed,
+            self._tasks([]),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.client.post(reverse('maintenance_run'))
+        run = MaintenanceRun.objects.get()
+        self.assertFalse(run.queued)
+        self.assertIsNotNone(run.finished_at)
+        closed.assert_called_once()

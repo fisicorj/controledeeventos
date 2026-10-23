@@ -33,9 +33,12 @@ def export_data(user):
     registrations = (
         Registration.objects.filter(user=user)
         .select_related('activity', 'category')
-        .prefetch_related('answers__question', 'attendances__session')
+        .prefetch_related('answers__question', 'attendances__session', 'session_enrollments__session')
         .order_by('created_at')
     )
+    session_certificates = {
+        c.session_enrollment_id: c for c in Certificate.objects.filter(session_enrollment__registration__user=user)
+    }
     certificates = {c.registration_id: c for c in Certificate.objects.filter(registration__user=user)}
     data = {
         'gerado_em': _when(timezone.now()),
@@ -71,6 +74,26 @@ def export_data(user):
             for c in Certificate.objects.filter(ownership(user), batch__isnull=False).distinct().order_by('pk')
         ],
         'equipe_de_checkin': list(user.checkin_activities.values_list('title', flat=True)),
+        'trabalhos_enviados': [
+            {
+                'evento': sub.call.activity.title,
+                'titulo': sub.title,
+                'coautores': sub.coauthor_list(),
+                'situacao': sub.get_status_display(),
+                'enviado_em': _when(sub.created_at),
+                'arquivo': sub.file_name,
+                'certificado_de_apresentacao': getattr(getattr(sub, 'certificate', None), 'code', None),
+            }
+            for sub in user.submissions.select_related('call__activity')
+        ],
+        'avaliacoes_de_trabalhos': [
+            {
+                'evento': r.submission.call.activity.title,
+                'trabalho': r.submission.title,
+                'entregue_em': _when(r.submitted_at),
+            }
+            for r in user.reviews.select_related('submission__call__activity')
+        ],
         'declaracoes_de_horas': [
             {
                 'codigo': d.code,
@@ -104,18 +127,63 @@ def export_data(user):
                 else None,
             }
         )
+        if r.activity.per_session:
+            data['inscricoes'][-1]['sessoes_escolhidas'] = [
+                _session_choice(e, session_certificates.get(e.pk)) for e in r.session_enrollments.all()
+            ]
     return data
 
 
-def keep_signature(user):
+def _session_choice(enrollment, certificate):
+    return {
+        'sessao': enrollment.session.title,
+        'inicio': _when(enrollment.session.start_at),
+        'situacao': enrollment.get_status_display(),
+        'escolhida_em': _when(enrollment.created_at),
+        'cancelada_em': _when(enrollment.cancelled_at),
+        'certificado': {
+            'codigo': certificate.code,
+            'nome_no_certificado': certificate.participant_name,
+            'revogado': certificate.is_revoked,
+        }
+        if certificate
+        else None,
+    }
+
+
+def _leave_submissions(user):
+    """Trabalhos ainda em avaliação são retirados (os aprovados continuam no evento, com os nomes que foram
+    publicados); o arquivo dos não aprovados é apagado. Sai da lista de avaliadores e das avaliações pendentes."""
+    from submissions.models import Submission
+
+    pending = user.submissions.exclude(status__in=Submission.FINAL)
+    for submission in pending:
+        submission.reviews.filter(submitted_at__isnull=True).delete()
+    pending.update(status=Submission.Status.WITHDRAWN)
+    for submission in user.submissions.exclude(status=Submission.Status.ACCEPTED):
+        if submission.file:
+            submission.file.delete(save=False)
+        submission.file_name = ''
+        submission.save(update_fields=['file', 'file_name'])
+    user.reviews.filter(submitted_at__isnull=True).delete()
+    user.review_calls.clear()
+
+
+def keep_signature(user, only_finished=False):
     """Quando a instituição não tem signatário próprio, os certificados saem com o nome de quem organizou ou
     emitiu. Antes de esse nome sumir (exclusão) ou de a atividade mudar de dono (transferência), ele fica gravado
-    na atividade e no lote, e os certificados já emitidos continuam iguais."""
+    na atividade e no lote, e os certificados já emitidos continuam iguais.
+
+    only_finished: na transferência, quem recebe pode passar a assinar as atividades que ainda não terminaram
+    (os certificados delas ainda não saíram). As finalizadas e as emissões avulsas sempre mantêm o nome."""
     from activities.models import Activity
     from certificates.models import CertificateBatch
 
     name = user.get_full_name() or user.username
-    Activity.objects.filter(organizer=user, signer_name='').update(signer_name=name)
+    activities = Activity.objects.filter(organizer=user, signer_name='')
+    if only_finished:
+        activities = activities.filter(status=Activity.Status.FINISHED)
+    activities.update(signer_name=name)
     CertificateBatch.objects.filter(created_by=user, signer_name='').update(signer_name=name)
 
 
@@ -123,7 +191,7 @@ def keep_signature(user):
 def anonymize(user):
     """Exclui a conta: tira os dados pessoais e impede o acesso. Devolve quantas inscrições futuras foram canceladas."""
     from core import outbox
-    from registrations import services
+    from registrations import services, sessions
     from registrations.models import Registration, RegistrationAnswer
 
     now = timezone.now()
@@ -142,8 +210,17 @@ def anonymize(user):
         )  # fmt: skip
         registration.save(update_fields=['status', 'waitlisted_at', 'cancelled_at'])
         cancelled += 1
+        sessions.cancel_all(registration)
         if was_confirmed:
             services.promote_waitlist(activity)  # a vaga vai para o próximo da fila
+    # Atividade por sessão já em andamento: a inscrição fica, mas as sessões que ainda vão acontecer são liberadas.
+    ongoing = Registration.objects.filter(
+        user=user, status=Registration.Status.CONFIRMED, activity__per_session=True
+    ).values_list('pk', 'activity_id')
+    for registration_id, activity_id in ongoing:
+        services.lock_activity(activity_id)
+        sessions.cancel_all(Registration.objects.get(pk=registration_id))
+    _leave_submissions(user)
     RegistrationAnswer.objects.filter(registration__user=user).delete()
     outbox.forget_address(user.email)  # o que não saiu é descartado; do que saiu, some destinatário e conteúdo
     user.email_codes.all().delete()

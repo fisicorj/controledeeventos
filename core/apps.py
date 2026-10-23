@@ -8,3 +8,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from . import checks  # noqa: F401 (registra as verificações do "manage.py check --deploy")
+        from .images import restrict_pillow
+
+        restrict_pillow()  # só JPEG, PNG e WebP (core/images.py)

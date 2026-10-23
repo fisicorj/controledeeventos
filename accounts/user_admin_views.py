@@ -239,7 +239,10 @@ def user_transfer(request, pk):
     receiver = get_object_or_404(User, pk=request.POST.get('to') or 0)
 
     def run(person):
-        activities, batches = user_admin.transfer_ownership(request.user, person, receiver, request)
+        signs_open = request.POST.get('assinatura') == 'nova'
+        activities, batches = user_admin.transfer_ownership(
+            request.user, person, receiver, request, receiver_signs_open=signs_open
+        )
         return activities, batches
 
     name = receiver.get_full_name() or receiver.username
@@ -293,6 +296,24 @@ def invite_cancel(request, pk):
     _admin_only(request)
     if invites.cancel(request.user, get_object_or_404(StaffInvite, pk=pk)):
         messages.success(request, 'Convite cancelado: o link deixou de valer.')
+    return redirect('user_admin_invites')
+
+
+@login_required
+@require_POST
+@require_recent_auth
+def invite_resend(request, pk):
+    from . import invites
+    from .models import StaffInvite
+
+    _admin_only(request)
+    invite = get_object_or_404(StaffInvite, pk=pk)
+    try:
+        invites.resend(request.user, invite, request)
+    except user_admin.Refused as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'Convite enviado de novo para {invite.email}; o link anterior deixou de valer.')
     return redirect('user_admin_invites')
 
 

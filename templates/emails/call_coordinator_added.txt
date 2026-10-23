@@ -1,0 +1,10 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{{ inviter }} incluiu você na coordenação da chamada de trabalhos de "{{ activity.title }}".
+
+Na coordenação, você cuida dos avaliadores, da distribuição dos trabalhos e das decisões desta chamada (as inscrições do evento continuam com a organização). A chamada fica em "Avaliações", no menu do portal, e aqui: {{ manage_url }}
+
+Como a coordenação vê os autores e os arquivos dos trabalhos, a conta passa a usar a verificação em duas etapas: no próximo acesso, o portal pede para cadastrar um aplicativo autenticador no celular (leva 2 minutos).
+
+{{ institution }}
+{% endautoescape %}

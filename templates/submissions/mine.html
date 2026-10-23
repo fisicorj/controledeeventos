@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Meus trabalhos | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head"><h1>Meus trabalhos</h1><p>Trabalhos que você enviou para chamadas de eventos. Se você avalia trabalhos, eles ficam em <a href="{% url 'my_reviews' %}">Trabalhos para avaliar</a>.</p></div>
+  <section class="panel">
+    {% for s in submissions %}
+      <div class="list-row">
+        <div><a class="fw-semibold" href="{% url 'submission_detail' s.pk %}">{{ s.title }}</a><div class="small text-secondary">{{ s.call.activity.title }} · enviado em {{ s.created_at|date:'d/m/Y' }}</div></div>
+        <div>{% include 'submissions/_status.html' %}</div>
+      </div>
+    {% empty %}
+      <div class="empty">Você ainda não enviou trabalhos. As chamadas abertas aparecem na página de cada evento.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

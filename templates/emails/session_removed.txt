@@ -1,0 +1,8 @@
+{% autoescape off %}Olá, {{ name }}.
+
+A organização cancelou a sessão "{{ session.title }}", de {{ session.start_at|date:'d/m/Y \à\s H:i' }}, que você tinha escolhido em "{{ activity.title }}".
+
+A sua inscrição no evento continua valendo. Se quiser, escolha outra sessão: {{ sessions_url }}
+
+{{ institution }}
+{% endautoescape %}

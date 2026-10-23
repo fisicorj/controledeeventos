@@ -313,3 +313,22 @@ class TransferAndCsvTests(TestCase):
         self.assertTrue(self.client.get(reverse('user_admin_csv')).url.startswith(reverse('reauth')))
         self.client.force_login(make_user('org2', User.Role.ORGANIZER))
         self.assertEqual(self.client.get(reverse('user_admin_csv')).status_code, 403)
+
+    def test_quem_recebe_pode_assinar_as_nao_finalizadas(self):
+        # P3 da 4ª auditoria
+        from activities.models import Activity
+        from activities.test_utils import make_activity
+        from certificates.batch import activity_signer, signer_for
+
+        finished = make_activity(self.old, title='Já acabou')
+        Activity.objects.filter(pk=finished.pk).update(status=Activity.Status.FINISHED)
+        url = reverse('user_admin_transfer', args=[self.old.pk])
+        self.client.post(url, {'to': self.new.pk, 'assinatura': 'nova'})
+        self.activity.refresh_from_db()
+        finished.refresh_from_db()
+        self.batch.refresh_from_db()
+        self.assertEqual(activity_signer(self.activity), 'Nina Nova')  # ainda não terminou: assina quem recebe
+        self.assertEqual(activity_signer(finished), 'Otto Antigo')
+        self.assertEqual(signer_for(self.batch), 'Otto Antigo')
+        change = UserChange.objects.get(action='TRANSFERRED')
+        self.assertEqual(change.details['assinatura_das_nao_finalizadas'], 'quem recebe')

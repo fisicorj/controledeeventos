@@ -1,0 +1,12 @@
+{% autoescape off %}Olá, {{ name }}.
+
+A sessão "{{ session.title }}", de "{{ activity.title }}", mudou:
+{% for c in changes %}
+{{ c.label }}: {{ c.after }} (antes: {{ c.before }}){% endfor %}
+{% if sessions_url %}
+Se o novo horário não der para você, ou se ele bater com outra sessão que você escolheu, troque ou saia da sessão em: {{ sessions_url }}
+{% else %}
+Página da atividade: {{ activity_url }}
+{% endif %}
+{{ institution }}
+{% endautoescape %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Relatório | {{ session.title }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'activity_manage' activity.id %}">{{ activity.title }}</a></div>
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+      <div>
+        <h1>Relatório da sessão</h1>
+        <p class="m-0">{{ session.title }} · {{ session.start_at|date:'d/m/Y H:i' }} até {{ session.end_at|date:'H:i' }}{% if speakers %} · {% for s in speakers %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap d-print-none">
+        <button type="button" class="btn btn-outline-secondary" data-print><i class="bi bi-printer"></i>Imprimir</button>
+        {% if speakers %}
+          <form method="post" action="{% url 'session_report_send' session.id %}" data-confirm="Enviar este relatório por e-mail aos palestrantes da sessão? Vão os números, os nomes de quem teve presença e os comentários da pesquisa (sem identificar quem escreveu)." data-confirm-label="Enviar">
+            {% csrf_token %}
+            <button class="btn btn-primary"><i class="bi bi-envelope"></i>Enviar aos palestrantes</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <section class="panel panel-body mb-4">
+    <div class="stat-row">
+      <div class="stat"><span class="stat-value tabular">{{ present_names|length }}</span><span class="stat-label">com presença</span></div>
+      <div class="stat"><span class="stat-value tabular">{{ expected }}</span><span class="stat-label">{% if activity.per_session %}confirmados na sessão{% else %}inscritos confirmados{% endif %}</span></div>
+      {% if rate is not None %}<div class="stat"><span class="stat-value tabular">{{ rate }}%</span><span class="stat-label">de comparecimento</span></div>{% endif %}
+      {% if survey.count %}<div class="stat"><span class="stat-value tabular">{{ survey.average }}</span><span class="stat-label">nota média ({{ survey.count }} nota{{ survey.count|pluralize }})</span></div>{% endif %}
+    </div>
+  </section>
+  <div class="row g-4">
+    <div class="col-md-6">
+      <section class="panel">
+        <div class="panel-head"><h2>Presença</h2></div>
+        <div class="panel-body small">{% if present_names %}<ol class="mb-0">{% for name in present_names %}<li>{{ name }}</li>{% endfor %}</ol>{% else %}<p class="text-secondary mb-0">Nenhuma presença registrada.</p>{% endif %}</div>
+      </section>
+    </div>
+    <div class="col-md-6">
+      <section class="panel">
+        <div class="panel-head"><h2>Comentários da pesquisa</h2></div>
+        {% for r in survey.comments %}
+          <div class="list-row"><div><span class="pill {% if r.score <= 6 %}pill-danger{% elif r.score <= 8 %}pill-wait{% else %}pill-open{% endif %} me-2">{{ r.score }}</span><span class="small">{{ r.comment }}</span></div></div>
+        {% empty %}
+          <div class="empty small">{% if activity.per_session %}Sem comentários sobre esta sessão.{% else %}A nota por sessão existe só no modo por sessão.{% endif %}</div>
+        {% endfor %}
+      </section>
+    </div>
+  </div>
+  {% if not speakers %}<p class="small text-secondary mt-3">Para enviar o relatório, ligue palestrantes com e-mail a esta sessão.</p>{% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Sessões | {{ activity.title }} | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'my_registrations' %}">Minhas inscrições</a></div>
+    <h1>{{ activity.title }}</h1>
+    <p>Escolha as sessões que você vai assistir. Cada sessão tem vagas próprias; se lotar, você entra na lista de espera dela e a vaga é confirmada sozinha quando alguém sair. Dá para entrar e sair de uma sessão até ela começar. O certificado sai por sessão, para cada sessão escolhida em que você tiver presença registrada.</p>
+  </div>
+
+  {% if not can_choose and activity.status == 'PUBLISHED' %}
+    <div class="alert alert-warning flash"><i class="bi bi-info-circle" aria-hidden="true"></i><div>
+      {% if registration.status == 'WAITLISTED' %}Você está na lista de espera do evento. Quando a sua vaga for confirmada, escolha as sessões aqui.
+      {% elif registration.offer_pending %}Confirme a sua vaga no evento, em "Minhas inscrições", para escolher as sessões.
+      {% elif registration.status == 'CANCELLED' %}A sua inscrição no evento foi cancelada.
+      {% else %}As sessões não podem ser escolhidas agora.{% endif %}
+    </div></div>
+  {% elif activity.status == 'CANCELLED' %}
+    <div class="alert alert-danger flash"><i class="bi bi-x-octagon" aria-hidden="true"></i><div>Esta atividade foi cancelada pela organização.</div></div>
+  {% endif %}
+  {% if can_choose and activity.status == 'PUBLISHED' %}
+    <p><a class="btn btn-sm btn-outline-secondary" href="{% url 'registration_calendar' registration.pk %}"><i class="bi bi-calendar-plus"></i>Baixar a agenda só com as minhas sessões (.ics)</a></p>
+  {% endif %}
+  {% if survey_blocks %}
+    <div class="alert alert-info flash"><i class="bi bi-star" aria-hidden="true"></i><div>Responda a <a href="{% url 'survey' registration.pk %}">pesquisa de satisfação</a> para liberar o download dos certificados.</div></div>
+  {% endif %}
+
+  <section class="panel">
+    {% for s in sessions %}
+      <div class="list-row">
+        <div class="d-flex gap-3 align-items-center">
+          {% include 'core/_date.html' with date=s.start_at size='sm' %}
+          <div>
+            <strong>{{ s.title }}</strong>
+            {% if s.mine.offer_pending %}<span class="pill pill-wait ms-1">Vaga reservada: confirme até {{ s.mine.offer_expires_at|date:'d/m H:i' }}</span>
+            {% elif s.mine.status == 'CONFIRMED' %}<span class="pill pill-open ms-1">Você vai</span>{% elif s.mine.status == 'WAITLISTED' %}<span class="pill pill-wait ms-1">Lista de espera · {{ s.position }}º</span>{% endif %}
+            <div class="small text-secondary">{{ s.start_at|date:'H:i' }} até {{ s.end_at|date:'H:i' }}{% if s.location %} · {{ s.location }}{% elif activity.location %} · {{ activity.location }}{% endif %}{% if activity.certificate_enabled %} · certificado de {{ s.certificate_hours }} h{% endif %}</div>
+            {% with people=s.speakers.all %}{% if people %}<div class="small"><i class="bi bi-mic me-1" aria-hidden="true"></i>{% for p in people %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% endwith %}
+            {% if s.capacity is not None and s.is_open %}<div class="small tabular {% if not s.remaining %}text-danger{% else %}text-secondary{% endif %}">{% if s.remaining %}{{ s.remaining }} de {{ s.capacity }} vaga{{ s.capacity|pluralize }}{% else %}Lotada{% if s.waiting %} · {{ s.waiting }} na fila{% endif %}{% endif %}</div>{% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          {% if s.mine.certificate and not s.mine.certificate.is_revoked %}
+            {% if survey_blocks %}
+              <span class="pill pill-muted"><i class="bi bi-lock" aria-hidden="true"></i>Certificado</span>
+            {% else %}
+              <a class="btn btn-sm btn-primary" href="{% url 'certificate_download' s.mine.certificate.code %}" target="_blank"><i class="bi bi-award"></i>Certificado (PDF)</a>
+            {% endif %}
+          {% elif s.mine.certificate %}
+            <span class="pill pill-danger" title="Revogado em {{ s.mine.certificate.revoked_at|date:'d/m/Y' }}">Certificado revogado</span>
+          {% elif can_choose and s.is_open %}
+            {% if s.mine.offer_pending %}
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="session" value="{{ s.id }}">
+                <input type="hidden" name="action" value="confirm">
+                <button class="btn btn-sm btn-primary">Confirmar vaga</button>
+              </form>
+            {% endif %}
+            {% if s.mine and s.mine.status != 'CANCELLED' %}
+              <form method="post" data-confirm="{% if s.mine.status == 'WAITLISTED' %}Sair da lista de espera de &quot;{{ s.title }}&quot;?{% else %}Sair de &quot;{{ s.title }}&quot;? A sua vaga vai para a próxima pessoa da fila.{% endif %}" data-confirm-label="Sair" data-confirm-danger>
+                {% csrf_token %}
+                <input type="hidden" name="session" value="{{ s.id }}">
+                <input type="hidden" name="action" value="leave">
+                <button class="btn btn-sm btn-outline-secondary text-danger">{% if s.mine.status == 'WAITLISTED' %}Sair da fila{% else %}Sair da sessão{% endif %}</button>
+              </form>
+            {% elif s.remaining or s.capacity is None or activity.waitlist_enabled %}
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="session" value="{{ s.id }}">
+                <input type="hidden" name="action" value="enter">
+                <button class="btn btn-sm {% if s.remaining or s.capacity is None %}btn-primary{% else %}btn-accent{% endif %}">{% if s.remaining or s.capacity is None %}Quero participar{% else %}Entrar na fila{% endif %}</button>
+              </form>
+            {% else %}
+              <span class="pill pill-closed">Lotada</span>
+            {% endif %}
+          {% elif not s.is_open and s.mine.status == 'CONFIRMED' %}
+            <span class="small text-secondary">{% if activity.status == 'FINISHED' %}Sem presença registrada{% else %}Sessão iniciada{% endif %}</span>
+          {% elif not s.is_open %}
+            <span class="small text-secondary">Encerrada para escolha</span>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="empty">A programação ainda não foi cadastrada.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

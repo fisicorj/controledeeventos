@@ -7,6 +7,7 @@ from django.utils.html import format_html
 from core import throttle
 from core.models import SiteSettings
 
+from . import known_device
 from .documents import clean_document
 from .models import User, reserved_username
 
@@ -102,7 +103,9 @@ class ProfileForm(EmailUniqueByVerifiedMixin, forms.ModelForm):
 # Senhas erradas em 15 minutos (SEC-08):
 # - 5 para o mesmo usuário vindo do mesmo IP: bloqueia só essa combinação. Quem tenta derrubar a conta de outra
 #   pessoa a partir de casa não impede o dono de entrar de onde ele está;
-# - 50 para o mesmo usuário vindo de qualquer IP: teto contra ataque distribuído;
+# - 50 para o mesmo usuário vindo de qualquer IP: teto contra ataque distribuído. Não vale para o navegador em
+#   que a pessoa já entrou com a senha certa (accounts/known_device.py): assim ninguém trava o login de outra
+#   pessoa de propósito só sabendo o nome de usuário dela;
 # - 100 por IP: alto porque num laboratório da faculdade todos os alunos saem pelo mesmo IP.
 LOGIN_FAILS_PER_USER_IP, LOGIN_FAILS_PER_USER, LOGIN_FAILS_PER_IP, LOGIN_PERIOD = 5, 50, 100, 15 * 60
 THROTTLED_LOGIN = 'Muitas tentativas de entrar. Espere 15 minutos ou use "Esqueceu a senha?".'
@@ -125,7 +128,9 @@ class LoginThrottleMixin:
         username = (self.data.get('username') or '').strip()
         ip = client_ip(self.request) if self.request else '-'
         counters = _login_counters(username, ip)
-        if any(throttle.blocked(limit, LOGIN_PERIOD, *key) for limit, key in counters):
+        known = known_device.is_known(self.request, username)
+        checked = [(limit, key) for limit, key in counters if not (known and key[0] == 'login-user')]
+        if any(throttle.blocked(limit, LOGIN_PERIOD, *key) for limit, key in checked):
             raise forms.ValidationError(self.error_messages['throttled'], code='throttled')
         try:
             data = super().clean()
@@ -134,6 +139,7 @@ class LoginThrottleMixin:
                 throttle.hit(limit, LOGIN_PERIOD, *key)
             raise
         throttle.reset('login-user-ip', username.lower(), ip)
+        known_device.remember(self.request, username)
         return data
 
 

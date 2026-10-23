@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.pagination import paginate
 from core.permissions import can_manage
-from registrations import services
+from registrations import services, sessions
 from registrations.forms import RegistrationAnswersForm, RegistrationOptionsForm
 from registrations.models import Registration
 
@@ -140,7 +140,7 @@ def _visible_announcements(activity, registration):
 def _detail(request, lookup, answers_form=None, options_form=None):
     activity = (
         with_counts(Activity.objects.prefetch_related('sessions__speakers', 'speakers'))
-        .select_related('organizer')
+        .select_related('organizer', 'call_for_papers')
         .filter(**lookup)
         .first()
     )
@@ -169,6 +169,8 @@ def _detail(request, lookup, answers_form=None, options_form=None):
             'answers_form': answers_form,
             'options_form': options_form,
             'categories': categories,
+            'session_list': _session_list(activity, registration),
+            'call': _visible_call(activity),
             'materials': _materials_for(request.user, activity) if request.user.is_authenticated else [],
             'announcements': announcements,
             'page_url': page_url,
@@ -177,6 +179,27 @@ def _detail(request, lookup, answers_form=None, options_form=None):
             'og_image': settings.SITE_URL + activity.image.url if activity.image else '',
         },
     )
+
+
+def _visible_call(activity):
+    """Chamada de trabalhos que aparece na página (só com a atividade publicada)."""
+    call = getattr(activity, 'call_for_papers', None)
+    return call if call is not None and call.is_visible else None
+
+
+def _session_list(activity, registration):
+    """Programação. Na atividade por sessão, com as vagas de cada sessão e a escolha da pessoa (my_status)."""
+    if not activity.per_session:
+        return activity.sessions.all()
+    items = sessions.with_room(activity, activity.sessions.all())
+    mine = {}
+    if registration:
+        mine = dict(
+            registration.session_enrollments.filter(status__in=sessions.ACTIVE).values_list('session_id', 'status')
+        )
+    for session in items:
+        session.my_status = mine.get(session.pk)
+    return items
 
 
 def calendar_ics(request, slug):

@@ -1,0 +1,1 @@
+<span class="pill {% if s.status == 'ACCEPTED' %}pill-open{% elif s.status == 'REJECTED' or s.status == 'WITHDRAWN' %}pill-muted{% elif s.status == 'REVISION' %}pill-wait{% else %}pill-soon{% endif %}">{{ s.get_status_display }}</span>

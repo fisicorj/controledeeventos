@@ -1,0 +1,9 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Você está inscrito em "{{ activity.title }}", mas ainda não escolheu as sessões que vai assistir. Cada sessão tem vagas próprias e o certificado é emitido por sessão, para quem a escolheu e teve presença.
+
+Escolha as suas sessões em: {{ sessions_url }}
+
+{% include 'emails/_activity_info.txt' %}
+{{ institution }}
+{% endautoescape %}

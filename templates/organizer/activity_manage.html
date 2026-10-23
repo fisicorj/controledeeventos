@@ -27,6 +27,7 @@
             <li><span class="dropdown-item-text small text-secondary">Lista de assinatura: na presença de cada sessão.</span></li>
           </ul>
         </div>
+        <a class="btn btn-outline-secondary" href="{% url 'call_manage' activity.id %}" title="Submissão e avaliação de trabalhos"><i class="bi bi-journal-text"></i>{% if activity.call_for_papers %}Trabalhos{% else %}Chamada de trabalhos{% endif %}</a>
         <a class="btn btn-outline-secondary" href="{% url 'activity_duplicate' activity.id %}" title="Copiar para a próxima edição"><i class="bi bi-copy"></i>Duplicar</a>
         {% if activity.status == 'PUBLISHED' %}
           <a class="btn btn-outline-primary" href="{% url 'activity_finish' activity.id %}"><i class="bi bi-flag"></i>Finalizar atividade</a>
@@ -47,19 +48,28 @@
           <div><h2>Sessões</h2><p>Abra a presença de uma sessão para fazer o check-in.</p></div>
           <a class="btn btn-sm btn-primary" href="{% url 'session_create' activity.id %}"><i class="bi bi-plus-lg"></i>Nova sessão</a>
         </div>
-        {% for s in activity.sessions.all %}
+        {% if activity.per_session %}<div class="panel-body pb-0 small text-secondary"><i class="bi bi-ui-checks me-1" aria-hidden="true"></i>Os participantes escolhem as sessões; cada sessão tem as suas vagas e o seu certificado.</div>{% endif %}
+        {% if without_sessions %}
+          <div class="alert alert-warning small mx-3 mt-3 mb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <span>{{ without_sessions }} inscrito{{ without_sessions|pluralize }} ainda sem nenhuma sessão escolhida (sem sessão, não há certificado).</span>
+            {% if activity.status == 'PUBLISHED' %}<form method="post" action="{% url 'sessions_remind' activity.id %}" data-confirm="Enviar um e-mail para {{ without_sessions }} inscrito{{ without_sessions|pluralize }} pedindo que escolham as sessões?" data-confirm-label="Enviar">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Avisar por e-mail</button></form>{% endif %}
+          </div>
+        {% endif %}
+        {% for s in session_list %}
           <div class="list-row">
             <div class="d-flex gap-3 align-items-center">
               {% include 'core/_date.html' with date=s.start_at size='sm' %}
               <div>
                 <strong>{{ s.title }}</strong>
                 <div class="small text-secondary">{{ s.start_at|date:'H:i' }} até {{ s.end_at|date:'H:i' }} · {{ s.location|default:activity.location }}</div>
+                {% if activity.per_session %}<div class="small tabular">{% if s.capacity is None %}<span class="text-danger">Sem vagas definidas</span>{% else %}{{ s.taken }} de {{ s.capacity }} vagas{% endif %}{% if s.waiting %} · {{ s.waiting }} na fila{% endif %} · {{ s.certificate_hours }} h no certificado</div>{% endif %}
               </div>
             </div>
             <div class="d-flex gap-2 align-items-center flex-wrap">
               {% if s.check_in_open %}<span class="pill pill-open">Check-in aberto</span>{% else %}<span class="pill pill-muted">Check-in fechado</span>{% endif %}
               <a class="btn btn-sm btn-primary" href="{% url 'session_attendance' s.id %}">Presença</a>
               <a class="btn btn-sm btn-outline-primary btn-icon" href="{% url 'checkin_app' s.id %}" title="Check-in no celular (funciona sem internet)" aria-label="Check-in no celular"><i class="bi bi-phone"></i></a>
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'session_report' s.id %}" title="Presença e notas da sessão, para enviar aos palestrantes">Relatório</a>
               <a class="btn btn-sm btn-outline-secondary" href="{% url 'session_edit' s.id %}">Editar</a>
               <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'session_delete' s.id %}" aria-label="Excluir {{ s.title }}"><i class="bi bi-trash"></i></a>
             </div>
@@ -93,19 +103,57 @@
         <div class="panel-head">
           <div>
             <h2>Inscritos ({{ rows|length }})</h2>
-            {% if activity.certificate_enabled %}<p>Certificado para frequência a partir de {{ activity.min_attendance_percent }}%{% if activity.status == 'FINISHED' %} · {{ certified_count }} emitido{{ certified_count|pluralize }}{% endif %}.</p>{% endif %}
+            {% if activity.certificate_enabled and activity.per_session %}<p>Certificado por sessão, para quem estava confirmado na sessão e teve presença{% if activity.status == 'FINISHED' %} · {{ certified_count }} emitido{{ certified_count|pluralize }}{% endif %}.</p>
+            {% elif activity.certificate_enabled %}<p>Certificado para frequência a partir de {{ activity.min_attendance_percent }}%{% if activity.status == 'FINISHED' %} · {{ certified_count }} emitido{{ certified_count|pluralize }}{% endif %}.</p>{% endif %}
           </div>
         </div>
+        {% if activity.status == 'PUBLISHED' %}
+          <form method="post" action="{% url 'participant_add' activity.id %}" class="panel-body d-flex gap-2 flex-wrap align-items-center border-bottom">
+            {% csrf_token %}
+            <label class="visually-hidden" for="add-person">Usuário ou e-mail</label>
+            <input id="add-person" name="person" class="form-control" style="max-width:280px" placeholder="Incluir: usuário ou e-mail" autocomplete="off" required>
+            {% if categories %}
+              <label class="visually-hidden" for="add-category">Tipo de vaga</label>
+              <select id="add-category" name="category" class="form-select" style="max-width:200px" required>
+                <option value="">Tipo de vaga...</option>
+                {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+              </select>
+            {% endif %}
+            <button class="btn btn-outline-primary"><i class="bi bi-person-plus"></i>Incluir participante</button>
+            <a class="btn btn-outline-secondary" href="{% url 'participant_batch' activity.id %}"><i class="bi bi-people"></i>Incluir em lote</a>
+            <span class="small text-secondary">Inscreve na hora, mesmo lotado, e envia o QR Code.</span>
+          </form>
+        {% endif %}
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>Nome</th><th>E-mail</th><th>Frequência</th>{% if activity.certificate_enabled %}<th>Certificado</th>{% endif %}</tr></thead>
+            <thead><tr><th>Nome</th><th>E-mail</th><th>{% if activity.per_session %}Sessões{% else %}Frequência{% endif %}</th>{% if activity.certificate_enabled %}<th>Certificado{% if activity.per_session %}s{% endif %}</th>{% endif %}</tr></thead>
             <tbody>
               {% for row in rows %}
                 <tr>
-                  <td>{{ row.user.get_full_name|default:row.user.username }}</td>
+                  <td><a href="{% url 'registration_admin' row.registration.id %}" title="Gerenciar a inscrição">{{ row.user.get_full_name|default:row.user.username }}</a></td>
                   <td class="text-secondary">{{ row.user.email }}</td>
+                  {% if activity.per_session %}
+                  <td class="text-nowrap" title="Presenças nas sessões escolhidas">{{ row.attended }} / {{ row.chosen }} <span class="text-secondary small">escolhida{{ row.chosen|pluralize }}</span></td>
+                  {% else %}
                   <td class="text-nowrap">{{ row.count }} / {{ session_count }}{% if session_count %} <span class="text-secondary">({{ row.percent }}%)</span>{% endif %}</td>
-                  {% if activity.certificate_enabled %}
+                  {% endif %}
+                  {% if activity.certificate_enabled and activity.per_session %}
+                    <td>
+                      {% for c in row.session_certificates %}
+                        <div class="small text-nowrap">
+                          {% if c.is_revoked %}<span class="pill pill-danger" title="Revogado em {{ c.revoked_at|date:'d/m/Y H:i' }}: {{ c.revoked_reason }}">Revogado</span>{% else %}<span class="pill pill-open">Emitido</span>{% endif %}
+                          <span class="text-truncate d-inline-block align-middle" style="max-width:12rem" title="{{ c.activity_title }}">{{ c.activity_title }}</span>
+                          {% if not c.is_revoked %}
+                            <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_download' c.code %}" target="_blank" title="PDF" aria-label="PDF do certificado de {{ row.user.get_full_name|default:row.user.username }} em {{ c.activity_title }}"><i class="bi bi-filetype-pdf"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_correct' c.code %}" title="Corrigir nome ou matrícula" aria-label="Corrigir certificado de {{ row.user.get_full_name|default:row.user.username }} em {{ c.activity_title }}"><i class="bi bi-pencil"></i></a>
+                            <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'certificate_revoke' c.code %}" title="Revogar" aria-label="Revogar certificado de {{ row.user.get_full_name|default:row.user.username }} em {{ c.activity_title }}"><i class="bi bi-x-octagon"></i></a>
+                          {% endif %}
+                        </div>
+                      {% empty %}
+                        {% if row.attended %}<span class="pill pill-soon">Apto em {{ row.attended }} sess{{ row.attended|pluralize:"ão,ões" }}</span>{% else %}<span class="text-secondary small">-</span>{% endif %}
+                      {% endfor %}
+                    </td>
+                  {% elif activity.certificate_enabled %}
                     <td>
                       {% if row.certified %}
                         <span class="pill pill-open">Emitido</span>
@@ -194,6 +242,15 @@
             <div class="list-row"><div><span class="pill {% if r.score <= 6 %}pill-danger{% elif r.score <= 8 %}pill-wait{% else %}pill-open{% endif %} me-2">{{ r.score }}</span><span class="small">{{ r.comment }}</span></div></div>
           {% endfor %}
         {% endif %}
+        {% if survey.sessions %}
+          <div class="panel-body pt-2">
+            <h3 class="h6">Notas por sessão</h3>
+            <table class="table table-sm small m-0">
+              <thead><tr><th>Sessão</th><th class="text-end">Média</th><th class="text-end">Notas</th><th class="text-end">Comentários</th></tr></thead>
+              <tbody>{% for item in survey.sessions %}<tr><td><a href="{% url 'session_report' item.session.id %}">{{ item.session.title }}</a></td><td class="text-end tabular">{{ item.average }}</td><td class="text-end tabular">{{ item.count }}</td><td class="text-end tabular">{{ item.comments|length }}</td></tr>{% endfor %}</tbody>
+            </table>
+          </div>
+        {% endif %}
         {% if survey_open and survey.pending %}
           <div class="list-row">
             <span class="small text-secondary">{{ survey.pending }} pessoa{{ survey.pending|pluralize }} ainda não {% if survey.pending == 1 %}respondeu{% else %}responderam{% endif %}.</span>
@@ -241,6 +298,27 @@
         {% endfor %}
       </section>
 
+      {% if role_certificates %}
+        <section class="panel mb-4">
+          <div class="panel-head"><div><h2>Palestrantes e apresentações</h2><p>Certificados emitidos ao finalizar. Sem e-mail cadastrado, baixe o PDF e envie você mesmo.</p></div></div>
+          {% for c in role_certificates %}
+            <div class="list-row">
+              <div>
+                <strong>{{ c.participant_name }}</strong>
+                <div class="small text-secondary">{{ c.get_role_display }}{% if c.role == 'PRESENTER' %}: {{ c.activity_title }}{% endif %}{% if c.participant_email %} · {{ c.participant_email }}{% else %} · sem e-mail{% endif %}</div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                {% if c.is_revoked %}<span class="pill pill-danger" title="Revogado em {{ c.revoked_at|date:'d/m/Y H:i' }}: {{ c.revoked_reason }}">Revogado</span>{% else %}
+                  <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_download' c.code %}" target="_blank" title="PDF" aria-label="PDF do certificado de {{ c.participant_name }}"><i class="bi bi-filetype-pdf"></i></a>
+                  <a class="btn btn-sm btn-outline-secondary btn-icon" href="{% url 'certificate_correct' c.code %}" title="Corrigir nome ou documento" aria-label="Corrigir certificado de {{ c.participant_name }}"><i class="bi bi-pencil"></i></a>
+                  <a class="btn btn-sm btn-outline-secondary btn-icon text-danger" href="{% url 'certificate_revoke' c.code %}" title="Revogar" aria-label="Revogar certificado de {{ c.participant_name }}"><i class="bi bi-x-octagon"></i></a>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+
       <section class="panel mb-4">
         <div class="panel-head">
           <div><h2>Formulário de inscrição</h2><p>Perguntas além de nome, e-mail e matrícula.</p></div>
@@ -268,7 +346,7 @@
           <div class="list-row">
             <div class="d-flex gap-3 align-items-center">
               <span class="avatar tabular">{{ forloop.counter }}</span>
-              <div><strong>{{ r.user.get_full_name|default:r.user.username }}</strong><div class="small text-secondary">{{ r.user.email }}</div></div>
+              <div><a class="fw-semibold" href="{% url 'registration_admin' r.id %}">{{ r.user.get_full_name|default:r.user.username }}</a><div class="small text-secondary">{{ r.user.email }}</div></div>
             </div>
             <span class="small text-secondary">{{ r.waitlisted_at|date:'d/m H:i' }}</span>
           </div>

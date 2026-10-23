@@ -1,0 +1,10 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{{ reviewer_name }} não vai avaliar o trabalho "{{ submission.title }}", em "{{ activity.title }}".
+Motivo: {{ decline.get_reason_display }}{% if decline.note %}
+Observação: {{ decline.note }}{% endif %}
+
+Designe outra pessoa na tela do trabalho, ou use "Distribuir automaticamente" na chamada (quem recusou não é escolhido de novo para este trabalho): {{ manage_url }}
+
+{{ institution }}
+{% endautoescape %}

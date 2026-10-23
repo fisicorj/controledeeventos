@@ -153,7 +153,7 @@ def can_receive(user):
 
 
 @transaction.atomic
-def transfer_ownership(actor, source, receiver, request=None):
+def transfer_ownership(actor, source, receiver, request=None, receiver_signs_open=False):
     """Passa as atividades e as emissões avulsas de uma conta para outra (ex.: organizador que saiu). A assinatura
     dos certificados já emitidos não muda (privacy.keep_signature)."""
     from activities.models import Activity
@@ -167,12 +167,15 @@ def transfer_ownership(actor, source, receiver, request=None):
     if not can_receive(receiver):
         raise Refused('A conta que recebe precisa estar ativa e ser de organizador ou administrador.')
     if not source.is_deleted:
-        keep_signature(source)
+        keep_signature(source, only_finished=receiver_signs_open)
     activities = Activity.objects.filter(organizer=source).update(organizer=receiver)
     batches = CertificateBatch.objects.filter(created_by=source).update(created_by=receiver)
     if not activities and not batches:
         raise Refused('Esta conta não tem atividades nem emissões avulsas para transferir.')
     details = {'atividades': activities, 'emissoes_avulsas': batches, 'para': f'conta {receiver.pk}'}
+    if receiver_signs_open:
+        details['assinatura_das_nao_finalizadas'] = 'quem recebe'
+
     record(actor, source, UserChange.Action.TRANSFERRED, details, request)
     return activities, batches
 

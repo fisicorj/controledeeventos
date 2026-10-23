@@ -60,10 +60,10 @@
           </section>
         {% endif %}
         <dl class="facts panel panel-body mb-4">
-          <div class="fact"><i class="bi bi-calendar-event" aria-hidden="true"></i><div><dt>Início</dt><dd>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</dd></div></div>
-          <div class="fact"><i class="bi bi-calendar-check" aria-hidden="true"></i><div><dt>Término</dt><dd>{{ activity.end_date|date:'d/m/Y \à\s H:i' }}</dd></div></div>
-          <div class="fact"><i class="bi bi-geo-alt" aria-hidden="true"></i><div><dt>Local</dt><dd>{{ activity.location|default:'A definir' }}{% if map_url %} <a class="small text-nowrap" href="{{ map_url }}" target="_blank" rel="noopener">Ver no mapa <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>{% endif %}</dd></div></div>
-          {% if activity.workload_hours %}<div class="fact"><i class="bi bi-hourglass-split" aria-hidden="true"></i><div><dt>Carga horária</dt><dd>{{ activity.workload_hours }} horas</dd></div></div>{% endif %}
+          <div class="fact"><dt><i class="bi bi-calendar-event" aria-hidden="true"></i>Início</dt><dd>{{ activity.start_date|date:'d/m/Y \à\s H:i' }}</dd></div>
+          <div class="fact"><dt><i class="bi bi-calendar-check" aria-hidden="true"></i>Término</dt><dd>{{ activity.end_date|date:'d/m/Y \à\s H:i' }}</dd></div>
+          <div class="fact"><dt><i class="bi bi-geo-alt" aria-hidden="true"></i>Local</dt><dd>{{ activity.location|default:'A definir' }}{% if map_url %} <a class="small text-nowrap" href="{{ map_url }}" target="_blank" rel="noopener">Ver no mapa <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>{% endif %}</dd></div>
+          {% if activity.workload_hours %}<div class="fact"><dt><i class="bi bi-hourglass-split" aria-hidden="true"></i>Carga horária</dt><dd>{{ activity.workload_hours }} horas</dd></div>{% endif %}
         </dl>
 
         {% if materials %}
@@ -83,12 +83,14 @@
         <h2 class="h4">Programação</h2>
         <div class="panel panel-body py-2 mb-4">
           <ul class="timeline">
-            {% for session in activity.sessions.all %}
+            {% for session in session_list %}
               <li>
                 {% include 'core/_date.html' with date=session.start_at size='sm' %}
                 <div>
                   <strong>{{ session.title }}</strong>
+                  {% if session.my_status == 'CONFIRMED' %} <span class="pill pill-open">Você vai</span>{% elif session.my_status == 'WAITLISTED' %} <span class="pill pill-wait">Na fila</span>{% endif %}
                   <div class="small text-secondary">{{ session.start_at|date:'H:i' }} até {{ session.end_at|date:'H:i' }}{% if session.location %} · {{ session.location }}{% endif %}</div>
+                  {% if activity.per_session and session.capacity is not None %}<div class="small tabular {% if not session.remaining %}text-danger{% else %}text-secondary{% endif %}">{% if not session.is_open %}Encerrada para escolha{% elif session.remaining %}{{ session.remaining }} de {{ session.capacity }} vaga{{ session.capacity|pluralize }}{% else %}Lotada{% if activity.waitlist_enabled %}, com lista de espera{% endif %}{% endif %}{% if activity.certificate_enabled %} · certificado de {{ session.certificate_hours }} h{% endif %}</div>{% endif %}
                   {% with people=session.speakers.all %}{% if people %}<div class="small mt-1"><i class="bi bi-mic me-1" aria-hidden="true"></i>{% for p in people %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% endwith %}
                 </div>
               </li>
@@ -120,7 +122,9 @@
         {% endwith %}
 
         <div class="d-flex flex-column gap-2 small text-secondary">
-          {% if activity.certificate_enabled %}<span><i class="bi bi-award me-1" aria-hidden="true"></i>Certificado emitido para quem tiver pelo menos {{ activity.min_attendance_percent }}% de frequência.</span>{% endif %}
+          {% if activity.per_session %}<span><i class="bi bi-ui-checks me-1" aria-hidden="true"></i>Na inscrição você escolhe as sessões que vai assistir. Cada sessão tem vagas próprias; dá para trocar até ela começar.</span>{% endif %}
+          {% if activity.certificate_enabled and activity.per_session %}<span><i class="bi bi-award me-1" aria-hidden="true"></i>Certificado por sessão, para cada sessão escolhida em que você tiver presença registrada.</span>
+          {% elif activity.certificate_enabled %}<span><i class="bi bi-award me-1" aria-hidden="true"></i>Certificado emitido para quem tiver pelo menos {{ activity.min_attendance_percent }}% de frequência.</span>{% endif %}
           <span><i class="bi bi-calendar-range me-1" aria-hidden="true"></i>Inscrições de {{ activity.registration_start|date:'d/m/Y H:i' }} até {{ activity.registration_end|date:'d/m/Y H:i' }}.</span>
         </div>
       </div>
@@ -143,6 +147,7 @@
           {% if state.code == 'registered' %}
             <div class="alert alert-success flash"><i class="bi bi-check-circle" aria-hidden="true"></i><div>Você está inscrito.</div></div>
             <a href="{% url 'my_registrations' %}" class="btn btn-primary w-100"><i class="bi bi-qr-code"></i>Ver meu QR Code</a>
+            {% if activity.per_session %}<a href="{% url 'registration_sessions' registration.pk %}" class="btn btn-outline-primary w-100 mt-2"><i class="bi bi-ui-checks"></i>Escolher ou trocar sessões</a>{% endif %}
           {% elif state.code == 'offer' %}
             <div class="alert alert-warning flash"><i class="bi bi-hourglass-split" aria-hidden="true"></i><div>Abriu uma vaga para você. Confirme até <strong>{{ state.deadline|date:'d/m \à\s H:i' }}</strong>.</div></div>
             <a href="{% url 'my_registrations' %}" class="btn btn-primary w-100">Confirmar em Minhas inscrições</a>
@@ -180,6 +185,23 @@
                   {% for error in code_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                 </div>
               {% endif %}{% endfor %}
+              {% if options_form.sessions and state.code != 'waitlist' %}
+                <fieldset class="mb-3">
+                  <legend class="form-label small mb-1">{{ options_form.sessions.label }}{% if options_form.require_sessions %} <span class="text-danger">*</span>{% endif %}</legend>
+                  {% for option in options_form.sessions %}
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="{{ option.data.name }}" value="{{ option.data.value }}" id="{{ option.id_for_label }}"{% if option.data.selected %} checked{% endif %}>
+                      <label class="form-check-label small" for="{{ option.id_for_label }}">{{ option.choice_label }}</label>
+                    </div>
+                  {% empty %}
+                    <p class="small text-secondary mb-0">Nenhuma sessão aberta para escolha.</p>
+                  {% endfor %}
+                  <div class="form-text">Dá para trocar depois, em "Minhas inscrições", até cada sessão começar.</div>
+                  {% for error in options_form.sessions.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </fieldset>
+              {% elif activity.per_session and state.code == 'waitlist' %}
+                <p class="small text-secondary">Quando a sua vaga no evento for confirmada, você escolhe as sessões em "Minhas inscrições".</p>
+              {% endif %}
               {% for field in answers_form %}
                 <div class="mb-3">
                   <label class="form-label small" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
@@ -200,6 +222,13 @@
           </div>
         </aside>
 
+        {% if call %}
+          <aside class="panel panel-body mt-3" aria-labelledby="cfp-title">
+            <h2 class="h6" id="cfp-title"><i class="bi bi-journal-text me-1" aria-hidden="true"></i>Chamada de trabalhos</h2>
+            <p class="small text-secondary mb-2">{% if call.is_open %}Submissões abertas até {{ call.closes_at|date:'d/m/Y \à\s H:i' }}.{% else %}Submissões de {{ call.opens_at|date:'d/m/Y' }} até {{ call.closes_at|date:'d/m/Y' }}.{% endif %}</p>
+            <a class="btn btn-outline-primary w-100" href="{% url 'call_page' activity.slug %}">{% if call.is_open %}Enviar trabalho{% else %}Ver a chamada{% endif %}</a>
+          </aside>
+        {% endif %}
         <div class="panel panel-body mt-3 share-card">
           <div class="dropdown mb-3">
             <button class="btn btn-outline-primary w-100 dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-calendar-plus"></i>Adicionar à agenda</button>

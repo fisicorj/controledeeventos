@@ -43,7 +43,7 @@
     <div class="col-lg-7">
       <section class="panel">
         <div class="panel-head">
-          <h2>Inscritos</h2>
+          <h2>{% if session.activity.per_session %}Inscritos nesta sessão{% else %}Inscritos{% endif %}</h2>
           <span class="text-secondary tabular">Presentes: <strong id="present-count">{{ present|length }}</strong> / {{ registrations|length }}</span>
         </div>
         <div class="px-4 pt-3">
@@ -79,6 +79,36 @@
           </table>
         </div>
       </section>
+      {% if session.activity.status == 'PUBLISHED' %}
+        <section class="panel mt-4">
+          <div class="panel-head"><h2>Chegou sem inscrição?</h2></div>
+          <form method="post" action="{% url 'walk_in_checkin' session.id %}" class="panel-body">
+            {% csrf_token %}
+            <p class="small text-secondary">Inscreve a pessoa {% if session.activity.per_session %}no evento e nesta sessão {% endif %}e já registra a presença. Ela precisa ter conta no portal (pode criar pelo celular na hora){% if not can_manage_activity %}, e é preciso haver vaga{% endif %}. Recebe o QR Code por e-mail.</p>
+            <div class="d-flex gap-2 flex-wrap">
+              <label class="visually-hidden" for="walk-in-person">Usuário ou e-mail</label>
+              <input id="walk-in-person" name="person" class="form-control" style="max-width:20rem" placeholder="Usuário de acesso ou e-mail" autocomplete="off" required>
+              {% with categories=session.activity.categories.all %}{% if categories %}
+                <label class="visually-hidden" for="walk-in-category">Tipo de vaga</label>
+                <select id="walk-in-category" name="category" class="form-select" style="max-width:14rem" required>
+                  <option value="">Tipo de vaga...</option>
+                  {% for c in categories %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+                </select>
+              {% endif %}{% endwith %}
+              <button class="btn btn-outline-primary"><i class="bi bi-person-plus"></i>Inscrever e registrar presença</button>
+            </div>
+          </form>
+        </section>
+      {% endif %}
+      {% if waitlist %}
+        <section class="panel mt-4">
+          <div class="panel-head"><h2>Lista de espera da sessão</h2><span class="text-secondary tabular">{{ waitlist|length }}</span></div>
+          <div class="panel-body small">
+            <p class="text-secondary">Sobem sozinhos, por ordem de chegada, quando alguém sai da sessão (até ela começar). Enquanto estiverem na fila, não têm presença nem certificado desta sessão.</p>
+            <ol class="mb-0">{% for e in waitlist %}<li>{{ e.registration.user.get_full_name|default:e.registration.user.username }}</li>{% endfor %}</ol>
+          </div>
+        </section>
+      {% endif %}
       {% if can_manage_activity and removals %}
         <section class="panel mt-4">
           <div class="panel-head"><h2>Presenças removidas</h2><span class="text-secondary">Registro permanente</span></div>

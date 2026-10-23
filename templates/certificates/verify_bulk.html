@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Validar vários certificados | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:980px">
+  <div class="page-head">
+    <div class="crumbs"><a href="{% url 'certificate_verify' %}">Validar certificado</a></div>
+    <h1>Validar vários códigos</h1>
+    <p>Para instituições parceiras e coordenações: cole até {{ limit }} códigos de certificados ou de declarações de horas, um por linha (ou separados por vírgula), e confira todos de uma vez.</p>
+  </div>
+  <form method="post" class="panel panel-body mb-4">
+    {% csrf_token %}
+    <label class="form-label" for="codigos">Códigos</label>
+    <textarea id="codigos" name="codigos" rows="6" class="form-control tabular" placeholder="ABCD-EFGH-JKMN&#10;PQRS-TUVW-XYZ2" required>{{ raw }}</textarea>
+    <div class="d-flex gap-2 mt-3"><button class="btn btn-primary"><i class="bi bi-patch-check"></i>Validar</button></div>
+  </form>
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+  {% if throttled %}<div class="alert alert-warning">Muitas consultas de códigos inexistentes a partir desta rede. Os códigos restantes não foram conferidos; tente de novo em uma hora.</div>{% endif %}
+  {% if rows %}
+    <div class="d-flex gap-4 flex-wrap mb-3">
+      <div><div class="small text-secondary">Válidos</div><div class="fs-4 fw-semibold tabular text-success">{{ summary.valid }}</div></div>
+      <div><div class="small text-secondary">Revogados ou cancelados</div><div class="fs-4 fw-semibold tabular text-danger">{{ summary.invalid }}</div></div>
+      <div><div class="small text-secondary">Não encontrados</div><div class="fs-4 fw-semibold tabular">{{ summary.missing }}</div></div>
+    </div>
+    <section class="panel">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th>Código</th><th>Situação</th><th>Participante</th><th>Atividade</th><th class="text-end">Horas</th></tr></thead>
+          <tbody>
+            {% for r in rows %}
+              <tr>
+                <td class="tabular text-nowrap">{% if r.item %}<a href="{% if r.kind == 'Certificado' %}{% url 'certificate_verify_code' r.code %}{% else %}{% url 'declaration_verify' r.code %}{% endif %}">{{ r.code }}</a>{% else %}{{ r.typed }}{% endif %}</td>
+                <td>{% if not r.item %}<span class="text-secondary">não encontrado</span>{% elif r.valid %}<span class="text-success">válido</span>{% elif r.kind == 'Certificado' %}<span class="text-danger fw-semibold">revogado</span>{% else %}<span class="text-danger fw-semibold">cancelada</span>{% endif %}</td>
+                {% if r.kind == 'Certificado' %}
+                  <td>{{ r.item.participant_name }}</td>
+                  <td>{{ r.item.full_title }}<div class="small text-secondary">{{ r.item.activity_type }} · {{ r.item.certificate_date|date:'d/m/Y' }}</div></td>
+                  <td class="tabular text-end">{% if r.item.workload_hours %}{{ r.item.workload_hours }} h{% else %}-{% endif %}</td>
+                {% elif r.kind %}
+                  <td>{% if r.valid %}{{ r.item.holder_name }}{% else %}<span class="text-secondary">-</span>{% endif %}</td>
+                  <td>Declaração de horas<div class="small text-secondary">emitida em {{ r.item.created_at|date:'d/m/Y' }}</div></td>
+                  <td class="tabular text-end">{% if r.valid %}{{ r.item.total_hours }} h{% else %}-{% endif %}</td>
+                {% else %}
+                  <td colspan="3"></td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

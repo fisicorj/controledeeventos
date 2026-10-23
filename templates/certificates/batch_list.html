@@ -9,7 +9,10 @@
         <h1>Emissão avulsa de certificados</h1>
         <p>Para eventos que não foram cadastrados no sistema: importe a planilha de participantes e emita os certificados.</p>
       </div>
-      <a class="btn btn-primary" href="{% url 'batch_new' %}"><i class="bi bi-plus-lg"></i>Nova emissão</a>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="{% url 'batch_group_report' %}"><i class="bi bi-people"></i>Horas por turma</a>
+        <a class="btn btn-primary" href="{% url 'batch_new' %}"><i class="bi bi-plus-lg"></i>Nova emissão</a>
+      </div>
     </div>
   </div>
   <form method="get" class="d-flex gap-2 mb-3" role="search" style="max-width:520px">

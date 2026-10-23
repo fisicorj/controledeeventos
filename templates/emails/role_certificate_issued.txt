@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{% if certificate.role == 'SPEAKER' %}Obrigado pela participação como palestrante em "{{ certificate.activity_title }}". Segue anexo o seu certificado.{% else %}Segue anexo o certificado de apresentação do trabalho "{{ certificate.activity_title }}" em "{{ certificate.event_title }}".{% endif %}
+
+Código de validação: {{ certificate.code }}
+Qualquer pessoa pode conferir a autenticidade em: {{ verify_url }}
+
+Se você tem conta no portal com este e-mail confirmado, o certificado também fica em "Minhas horas": {{ my_hours_url }}
+
+{{ institution }}
+{% endautoescape %}

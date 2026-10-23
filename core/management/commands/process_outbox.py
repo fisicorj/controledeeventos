@@ -33,15 +33,16 @@ class Command(BaseCommand):
     def handle(self, *args, continuo, intervalo, sem_lembretes, sem_zips=False, so_zips=False, **options):
         if so_zips:
             return self.zips_only(continuo, intervalo)
-        schedule = [(UPKEEP_EVERY, self.upkeep), (MAINTENANCE_EVERY, self.maintenance)]
+        from core import periodic
+
+        schedule = [('upkeep', UPKEEP_EVERY, self.upkeep), ('maintenance', MAINTENANCE_EVERY, self.maintenance)]
         if not sem_lembretes:
-            schedule.append((REMINDERS_EVERY, self.reminders))
-        last_run = {task: float('-inf') for _, task in schedule}
+            schedule.append(('reminders', REMINDERS_EVERY, self.reminders))
         while True:
             if continuo:
-                for every, task in schedule:
-                    if time.monotonic() - last_run[task] >= every:
-                        last_run[task] = time.monotonic()
+                # A vez de cada tarefa fica no banco: um deploy não repete a tarefa, e dois workers não rodam juntos.
+                for name, every, task in schedule:
+                    if periodic.claim(name, every):
                         task()
                 close_old_connections()  # rodando por dias: renova a conexão com o banco se ela caiu
             self.requested_maintenance()
@@ -107,7 +108,7 @@ class Command(BaseCommand):
                 self.stdout.write(f'E-mails antigos com o conteúdo apagado: {redacted}.')
 
     def reminders(self):
-        """De hora em hora: lembrete de véspera (cada inscrição recebe uma vez só)."""
+        """De hora em hora: lembrete de véspera (cada inscrição recebe uma vez só) e prazo dos avaliadores."""
         from django.core.management import call_command
 
         try:

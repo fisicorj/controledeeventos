@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'registrations',
     'attendance',
     'certificates',
+    'submissions',
     'core',
 ]
 MIDDLEWARE = [
@@ -67,6 +68,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'accounts.middleware.MfaMiddleware',
+    'accounts.known_device.KnownDeviceMiddleware',
     'accounts.sessions.SessionTrackingMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -171,6 +173,11 @@ SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8000').rstrip('/')
 # O servidor SMTP/relay, o remetente e a senha são configurados dentro da plataforma
 # (Configurações > E-mail). Enquanto o envio estiver desligado lá, os e-mails só aparecem no terminal/log.
 EMAIL_BACKEND = 'core.mail.PlatformEmailBackend'
+# Envio desligado: em desenvolvimento o e-mail inteiro aparece no terminal; em produção, só destinatário e assunto
+# (o corpo tem códigos e links de troca de senha). EMAIL_LOG_BODY=True mostra o corpo também em produção.
+EMAIL_LOG_BODY = env_bool('EMAIL_LOG_BODY', DEBUG)
+# Contas criadas por IP por hora. Alto o bastante para um laboratório inteiro atrás do mesmo IP se cadastrar.
+SIGNUPS_PER_IP_HOUR = int(os.getenv('SIGNUPS_PER_IP_HOUR', '40'))
 DEFAULT_FROM_EMAIL = 'nao-responda@localhost'  # usado só se nenhum remetente for configurado na plataforma
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24  # link válido por 24 horas
 # Os e-mails saem em texto e também numa versão HTML com a cor e o nome da instituição (core/mail_html.py).
@@ -200,8 +207,12 @@ CSP_MODE = (os.getenv('CSP_MODE') or 'enforce').strip().lower()
 # NUM_PROXIES: quantos proxies confiáveis existem na frente da aplicação (0 = acesso direto).
 # Só com NUM_PROXIES > 0 o cabeçalho X-Forwarded-For é usado para obter o IP do cliente.
 NUM_PROXIES = int(os.getenv('NUM_PROXIES', '0'))
+# Cabeçalho que diz se o visitante chegou por HTTPS. Com o CloudFront na frente do ALB (infra/setup.sh,
+# CLOUDFRONT=1), o ALB recebe HTTP do CloudFront e escreveria "http" no X-Forwarded-Proto: aí vale o
+# CloudFront-Forwarded-Proto, que o CloudFront preenche com o protocolo do visitante.
+PROXY_SSL_HEADER = (os.getenv('PROXY_SSL_HEADER') or 'X-Forwarded-Proto').strip()
 if NUM_PROXIES > 0:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_' + PROXY_SSL_HEADER.upper().replace('-', '_'), 'https')
 
 # HTTPS_ENABLED vale True por padrão em produção. Desligue apenas para testes em rede local sem certificado.
 HTTPS_ENABLED = env_bool('HTTPS_ENABLED', not DEBUG)

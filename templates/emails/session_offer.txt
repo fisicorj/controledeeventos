@@ -1,0 +1,9 @@
+{% autoescape off %}Olá, {{ name }}.
+
+Abriu uma vaga na sessão "{{ session.title }}" ({{ session.start_at|date:'d/m/Y \à\s H:i' }}), de "{{ activity.title }}", e ela está reservada para você.
+
+Confirme até {{ deadline|date:'d/m/Y \à\s H:i' }}: {{ sessions_url }}
+Se não confirmar até lá, a vaga passa para a próxima pessoa da fila.
+
+{{ institution }}
+{% endautoescape %}

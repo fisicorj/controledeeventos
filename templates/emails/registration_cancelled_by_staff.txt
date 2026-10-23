@@ -1,0 +1,11 @@
+{% autoescape off %}Olá, {{ name }}.
+
+A organização cancelou a sua inscrição em "{{ activity.title }}".
+{% if note %}
+Motivo:
+{{ note }}
+{% endif %}
+Se achar que foi um engano, responda a organização pela página da atividade: {{ activity_url }}
+
+{{ institution }}
+{% endautoescape %}

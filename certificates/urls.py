@@ -4,6 +4,7 @@ from . import audit_views, batch_views, manage_views, views
 
 urlpatterns = [
     path('validar/', views.verify, name='certificate_verify'),
+    path('validar-varios/', views.verify_bulk, name='certificate_verify_bulk'),
     path('minhas-horas/', views.my_hours, name='my_hours'),
     path('minhas-horas/vincular/', views.claim_start, name='certificate_claim_start'),
     path('minhas-horas/vincular/<str:code>/', views.claim_confirm, name='certificate_claim'),
@@ -18,6 +19,7 @@ urlpatterns = [
     path('auditoria.csv', audit_views.audit_csv, name='certificate_audit_csv'),
     # Emissão avulsa (evento que não foi cadastrado no sistema)
     path('avulsos/', batch_views.batch_list, name='batch_list'),
+    path('avulsos/turmas/', batch_views.group_report, name='batch_group_report'),
     path('avulsos/novo/', batch_views.batch_new, name='batch_new'),
     path('avulsos/novo/planilha-completa/', batch_views.batch_full, name='batch_full'),
     path('avulsos/previa/', batch_views.batch_preview, name='batch_preview'),

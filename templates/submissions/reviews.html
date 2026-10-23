@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Avaliações | {{ portal.portal_name }}{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px">
+  <div class="page-head"><h1>Avaliações</h1><p>Trabalhos que a organização designou para você{% if coordinated %} e as chamadas que você coordena{% endif %}.</p></div>
+  {% if coordinated %}
+    <section class="panel mb-4">
+      <div class="panel-head"><h2>Chamadas que você coordena</h2></div>
+      {% for call in coordinated %}
+        <div class="list-row"><div><a class="fw-semibold" href="{% url 'call_manage' call.activity_id %}">{{ call.activity.title }}</a><div class="small text-secondary">Submissões até {{ call.closes_at|date:'d/m/Y' }}</div></div></div>
+      {% endfor %}
+    </section>
+    <h2 class="h5">Trabalhos para avaliar</h2>
+  {% endif %}
+  <section class="panel">
+    {% for r in reviews %}
+      <div class="list-row">
+        <div><a class="fw-semibold" href="{% url 'review_form' r.pk %}">{{ r.submission.title }}</a><div class="small text-secondary">{{ r.submission.call.activity.title }}{% if r.submission.area %} · {{ r.submission.area }}{% endif %}{% if not r.is_done and not r.submission.is_final and r.due_at %} · {% if r.is_overdue %}<span class="text-danger">prazo terminou em {{ r.due_at|date:'d/m/Y H:i' }}</span>{% else %}prazo até {{ r.due_at|date:'d/m/Y H:i' }}{% endif %}{% endif %}</div></div>
+        <div>{% if r.is_done %}<span class="pill pill-open">Avaliado</span>{% elif r.submission.is_final %}<span class="pill pill-muted">Decidido</span>{% else %}<span class="pill pill-wait">Pendente</span>{% endif %}</div>
+      </div>
+    {% empty %}
+      <div class="empty">Nenhum trabalho designado para você.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

@@ -91,7 +91,9 @@ def expire_all_offers():
             activity = lock_activity(activity_id)
             total += len(expire_offers(activity))
             promote_waitlist(activity, expire=False)
-    return total
+    from .sessions import expire_all_offers as expire_session_offers
+
+    return total + expire_session_offers()
 
 
 def clear_offers(activity):

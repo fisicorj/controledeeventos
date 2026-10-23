@@ -1,0 +1,10 @@
+{% autoescape off %}Olá, {{ name }}.
+
+{{ reviewer_name }} aceitou o convite para avaliar trabalhos da chamada de "{{ activity.title }}" e já faz parte dos avaliadores.
+{% if other_email %}
+Atenção: o convite foi enviado para {{ invite.email }}, mas foi aceito com a conta de e-mail {{ reviewer_email }}. Se não reconhecer essa pessoa, retire-a dos avaliadores na tela da chamada.
+{% endif %}
+Chamada: {{ manage_url }}
+
+{{ institution }}
+{% endautoescape %}

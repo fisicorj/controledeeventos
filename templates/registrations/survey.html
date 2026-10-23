@@ -21,6 +21,22 @@
       {% for error in form.score.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
     </fieldset>
     {% include 'core/_field.html' with field=form.comment %}
+    {% if form.sessions %}
+      <fieldset class="mb-3">
+        <legend class="form-label fs-6 fw-semibold">E as sessões em que você esteve? (opcional)</legend>
+        {% for session, score, comment in form.session_fields %}
+          <div class="border rounded p-3 mb-2">
+            <div class="fw-semibold small mb-2">{{ session.title }} <span class="text-secondary fw-normal">{{ session.start_at|date:'d/m H:i' }}</span></div>
+            <div class="row g-2">
+              <div class="col-sm-4"><label class="form-label small" for="{{ score.id_for_label }}">Nota de 0 a 10</label><select name="{{ score.html_name }}" id="{{ score.id_for_label }}" class="form-select form-select-sm">{% for value, label in score.field.choices %}<option value="{{ value }}"{% if score.value|stringformat:'s' == value|stringformat:'s' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+              <div class="col-sm-8"><label class="form-label small" for="{{ comment.id_for_label }}">Comentário</label><textarea name="{{ comment.html_name }}" id="{{ comment.id_for_label }}" rows="2" maxlength="1000" class="form-control form-control-sm">{{ comment.value|default:'' }}</textarea></div>
+            </div>
+            {% for error in score.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}{% for error in comment.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+        <div class="form-text">Ajuda a organização e os palestrantes de cada sessão.</div>
+      </fieldset>
+    {% endif %}
     <p class="small text-secondary"><i class="bi bi-incognito me-1" aria-hidden="true"></i>A organização vê as notas e comentários sem o seu nome.</p>
     <button class="btn btn-primary px-4">Enviar avaliação</button>
   </form>

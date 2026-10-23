@@ -36,3 +36,17 @@ def require_recent_auth(view):
         return view(request, *args, **kwargs)
 
     return wrapper
+
+
+def require_recent_auth_to_save(view):
+    """Como require_recent_auth, mas só para gravar (POST): a tela abre sem pedir a senha, para quem só quer
+    consultar. A view pode usar is_recent(request) para avisar antes que salvar vai pedir a senha."""
+    protected = require_recent_auth(view)
+
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return view(request, *args, **kwargs)
+        return protected(request, *args, **kwargs)
+
+    return wrapper

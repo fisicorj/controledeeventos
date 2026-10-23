@@ -8,6 +8,7 @@
       <p>Gerencie atividades, inscritos e presenças.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-primary" href="{% url 'institution_panel' %}"><i class="bi bi-bar-chart"></i>Números do semestre</a>
       <a class="btn btn-outline-primary" href="{% url 'batch_list' %}" title="Certificados de eventos que não foram cadastrados no sistema"><i class="bi bi-award"></i>Emissão avulsa de certificados</a>
       <a class="btn btn-primary" href="{% url 'activity_create' %}"><i class="bi bi-plus-lg"></i>Nova atividade</a>
     </div>
