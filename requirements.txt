@@ -2,7 +2,7 @@
 # testes e faça o deploy. O Dependabot (.github/dependabot.yml) abre um pull request quando sai versão nova.
 Django==5.2.17
 psycopg[binary]==3.3.6
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 Pillow==13.0.0
 openpyxl==3.1.5
 # Leitura segura do XML das planilhas .xlsx (o openpyxl usa sozinho quando está instalado)
@@ -11,7 +11,7 @@ qrcode[pil]==8.2
 reportlab==5.0.1
 # Tira o nome dos autores dos metadados do PDF na avaliação às cegas (puro Python)
 pypdf==6.21.2
-cryptography==50.0.1
+cryptography==50.0.2
 whitenoise==6.12.0
 # Servidor de produção: gunicorn no Linux/Docker, waitress no Windows
 gunicorn==26.2.0; sys_platform != "win32"
