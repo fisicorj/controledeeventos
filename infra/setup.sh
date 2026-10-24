@@ -474,12 +474,12 @@ if [ "${ACCESS_LOGS}" = "1" ]; then
     fi
   fi
   aws_q s3api put-public-access-block --bucket "${LOG_BUCKET}" --public-access-block-configuration \
-    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true > /dev/null
   # O CloudFront grava os registros com permissão por ACL (só para a conta de entrega de logs da AWS).
   aws_q s3api put-bucket-ownership-controls --bucket "${LOG_BUCKET}" \
-    --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerPreferred}]'
+    --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerPreferred}]' > /dev/null
   aws_q s3api put-bucket-encryption --bucket "${LOG_BUCKET}" --server-side-encryption-configuration \
-    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' > /dev/null
   LOG_FILE="$(mktemp)"
   python3 - "${LOG_FILE}" "${LOG_DAYS}" <<'PY'
 import json, sys
@@ -487,7 +487,8 @@ import json, sys
 rule = {'ID': 'expira', 'Status': 'Enabled', 'Filter': {'Prefix': ''}, 'Expiration': {'Days': int(sys.argv[2])}}
 json.dump({'Rules': [rule]}, open(sys.argv[1], 'w'))
 PY
-  aws_q s3api put-bucket-lifecycle-configuration --bucket "${LOG_BUCKET}" --lifecycle-configuration "file://${LOG_FILE}"
+  aws_q s3api put-bucket-lifecycle-configuration --bucket "${LOG_BUCKET}" \
+    --lifecycle-configuration "file://${LOG_FILE}" > /dev/null
   # Quem grava os registros do ALB: o serviço de entrega e, nas regiões mais antigas, a conta do ELB da região.
   python3 - "${LOG_FILE}" "${LOG_BUCKET}" "${AWS_ACCOUNT_ID}" "${REGION}" <<'PY'
 import json, sys
@@ -513,7 +514,7 @@ statements.append({
 })
 json.dump({'Version': '2012-10-17', 'Statement': statements}, open(path, 'w'))
 PY
-  aws_q s3api put-bucket-policy --bucket "${LOG_BUCKET}" --policy "file://${LOG_FILE}"
+  aws_q s3api put-bucket-policy --bucket "${LOG_BUCKET}" --policy "file://${LOG_FILE}" > /dev/null
   rm -f "${LOG_FILE}"
   ALB_LOG_ATTRS="Key=access_logs.s3.enabled,Value=true Key=access_logs.s3.bucket,Value=${LOG_BUCKET} Key=access_logs.s3.prefix,Value=alb"
 else
@@ -802,7 +803,9 @@ aliases = {'Quantity': 1, 'Items': [domain]} if domain else {'Quantity': 0}
 viewer_certificate = (
     {'ACMCertificateArn': cert, 'SSLSupportMethod': 'sni-only', 'MinimumProtocolVersion': 'TLSv1.2_2021'}
     if domain
-    else {'CloudFrontDefaultCertificate': True}
+    # Com o certificado padrão (*.cloudfront.net), a AWS fixa a versão mínima em TLSv1, mas exige o campo
+    # na atualização.
+    else {'CloudFrontDefaultCertificate': True, 'MinimumProtocolVersion': 'TLSv1'}
 )
 
 
@@ -824,9 +827,11 @@ if os.path.getsize(current):
     existing = json.load(open(current))['DistributionConfig']
     config['CallerReference'] = existing['CallerReference']
     config = merge(existing, config)
-# Estes dois são trocados inteiros (misturar o certificado padrão com o do domínio é inválido).
+# Estes dois são trocados inteiros (misturar o certificado padrão com o do domínio é inválido). Sem domínio e já
+# no certificado padrão, fica o que a AWS devolveu (com todos os campos que ela espera de volta).
 config['Aliases'] = aliases
-config['ViewerCertificate'] = viewer_certificate
+if domain or not config.get('ViewerCertificate', {}).get('CloudFrontDefaultCertificate'):
+    config['ViewerCertificate'] = viewer_certificate
 if access_logs == '1':
     config['Logging'] = {
         'Enabled': True, 'IncludeCookies': False, 'Bucket': f'{log_bucket}.s3.amazonaws.com', 'Prefix': 'cloudfront/'
