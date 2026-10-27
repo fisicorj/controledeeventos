@@ -10,6 +10,10 @@ staticfiles/
 .idea/
 .vscode/
 .ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+Claude outputs/
 .github/
 .env.*
 !.env.example

@@ -165,7 +165,7 @@ O usuário do banco precisa de permissão para criar bancos (`CREATEDB`); o do `
 
 Confira item por item (os detalhes estão nas seções abaixo):
 
-- [ ] `SECRET_KEY` própria, com cópia guardada fora do servidor (a senha do SMTP e a verificação em duas etapas dependem dela)
+- [ ] `SECRET_KEY` e `FIELD_ENCRYPTION_KEY` próprias, com cópia guardada fora do servidor (a senha do SMTP e a verificação em duas etapas dependem da `FIELD_ENCRYPTION_KEY`; sem ela, da `SECRET_KEY`). Veja "Troca de chaves"
 - [ ] `DEBUG=False`; `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` e `SITE_URL` com o endereço público
 - [ ] **Domínio definitivo antes do primeiro certificado real**: o QR Code e o link de validação guardam o `SITE_URL` da emissão. Com um endereço provisório da AWS (`*.cloudfront.net` ou `*.elb.amazonaws.com`), o `check --deploy` avisa (`arena.W005`) e as telas de emissão mostram um alerta
 - [ ] Aviso de privacidade (`/privacidade/`) revisado pela instituição, com o contato em Configurações
@@ -329,7 +329,7 @@ Se algum registro antigo violar uma regra, o comando mostra os ids; corrija pelo
 Em produção (`DEBUG=False`), administradores, organizadores, quem acessa o `/admin/` e quem coordena alguma chamada de trabalhos (vê os autores, baixa os arquivos e decide) precisam cadastrar um aplicativo autenticador no primeiro acesso: o sistema mostra um QR Code, pede um código para confirmar e entrega 10 códigos de recuperação (aparecem uma vez só; guarde-os). Depois disso, todo login pede o código do aplicativo. Em **Meus dados > Verificação em duas etapas** dá para gerar novos códigos de recuperação ou trocar de celular.
 
 - Celular perdido e sem códigos de recuperação: depois de confirmar a identidade da pessoa, um administrador do servidor executa `python manage.py reset_mfa <usuário ou e-mail>` (no Docker: `docker compose exec web python manage.py reset_mfa <usuário>`). No próximo acesso ela cadastra de novo.
-- O segredo de cada cadastro fica criptografado com uma chave derivada da `SECRET_KEY`. Se a `SECRET_KEY` mudar, todos precisam cadastrar de novo (use `reset_mfa` para cada conta).
+- O segredo de cada cadastro fica criptografado com a `FIELD_ENCRYPTION_KEY` (sem ela, com a `SECRET_KEY`). Trocar uma dessas chaves não derruba ninguém se a antiga ficar no `*_FALLBACKS` correspondente até a faxina diária rodar (veja "Troca de chaves"). Sem a chave antiga, todos precisam cadastrar de novo (use `reset_mfa` para cada conta).
 - `MFA_REQUIRED=False` deixa a verificação opcional (só quem ativar em "Meus dados"). Com `DEBUG=True` ela já é opcional, para não atrapalhar o desenvolvimento.
 - `PRIVILEGED_SESSION_HOURS` (padrão 8) é a duração máxima da sessão dessas contas; participantes continuam com 2 semanas.
 - `reset_mfa` também encerra todas as sessões abertas da conta: quem estava com o celular perdido (ou com a sessão roubada) precisa entrar de novo.
@@ -414,7 +414,15 @@ O servidor de envio é configurado dentro da plataforma, em **Configurações > 
 
 Enquanto o envio estiver desligado nessa tela, os e-mails não saem: no log aparecem só o destinatário e o assunto (com `EMAIL_LOG_BODY=True`, ou em desenvolvimento, a mensagem inteira).
 
-A senha do SMTP é criptografada com uma chave derivada da `SECRET_KEY`. Se a `SECRET_KEY` mudar, cadastre a senha de novo.
+A senha do SMTP é criptografada com a `FIELD_ENCRYPTION_KEY` (sem ela, com a `SECRET_KEY`). Veja "Troca de chaves" abaixo; se a chave antiga se perder, cadastre a senha de novo.
+
+### Troca de chaves
+
+A `FIELD_ENCRYPTION_KEY` protege só os segredos guardados no banco (senha do SMTP e segredos da verificação em duas etapas). Separada da `SECRET_KEY`, quem descobrir uma não lê o que a outra protege. Sem ela, o `check --deploy` avisa (`arena.W006`).
+
+- **Definir a `FIELD_ENCRYPTION_KEY` numa instalação que já existe:** gere com `python -c "import secrets; print(secrets.token_urlsafe(48))"`, coloque no `.env` e reinicie. Os segredos antigos continuam legíveis pela `SECRET_KEY`, e a próxima faxina diária (ou **Configurações > Manutenção > Rodar agora**) regrava todos com a chave nova. O `infra/setup.sh` já cria essa chave no SSM.
+- **Trocar a `SECRET_KEY`** (ex.: suspeita de vazamento): ponha a antiga em `SECRET_KEY_FALLBACKS` e a nova em `SECRET_KEY`. Sessões e links de senha continuam valendo; tire a antiga depois de alguns dias (ou na hora, se ela vazou, aceitando que todos façam login de novo).
+- **Trocar a `FIELD_ENCRYPTION_KEY`:** ponha a antiga em `FIELD_ENCRYPTION_KEY_FALLBACKS` e a nova em `FIELD_ENCRYPTION_KEY`. Depois que a faxina rodar ("Segredos regravados com a chave atual" no relatório), a antiga pode sair.
 
 Defina também `SITE_URL` no `.env` (endereço público, usado nos links dos e-mails e no QR de validação dos certificados).
 
@@ -477,7 +485,7 @@ bash scripts/restore.sh backups/arena-db-AAAAMMDD-HHMMSS.dump backups/arena-arqu
 docker compose --profile prod up -d
 ```
 
-Guarde também o `.env` (principalmente a `SECRET_KEY`) num lugar seguro e separado: sem a mesma chave, a senha do SMTP e os cadastros da verificação em duas etapas precisam ser refeitos.
+Guarde também o `.env` (principalmente a `SECRET_KEY` e a `FIELD_ENCRYPTION_KEY`) num lugar seguro e separado: sem as mesmas chaves, a senha do SMTP e os cadastros da verificação em duas etapas precisam ser refeitos.
 
 ### Configurações da instituição
 

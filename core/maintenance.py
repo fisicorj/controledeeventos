@@ -105,7 +105,14 @@ def redact_emails():
     return outbox.redact_sent()
 
 
+def reencrypt_secrets():
+    from . import crypto
+
+    return crypto.reencrypt_all()
+
+
 TASKS = [
+    ('Segredos regravados com a chave atual', reencrypt_secrets),
     ('Sessões vencidas apagadas', clear_sessions),
     ('Códigos de confirmação antigos apagados', purge_email_codes),
     ('Contadores de tentativas antigos apagados', purge_throttle),

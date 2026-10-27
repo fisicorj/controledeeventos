@@ -38,6 +38,17 @@ if SECRET_KEY in _PLACEHOLDER_KEYS or len(SECRET_KEY) < 50:  # o mesmo mínimo q
             'python -c "from django.core.management.utils import get_random_secret_key as g; print(g())"'
         )
 
+# Troca da SECRET_KEY sem derrubar ninguém: coloque a antiga aqui (separadas por vírgula) enquanto as sessões e os
+# links de senha antigos ainda valerem; os segredos guardados no banco também continuam legíveis (core/crypto.py).
+SECRET_KEY_FALLBACKS = env_list('SECRET_KEY_FALLBACKS')
+# Chave própria dos segredos guardados no banco (senha do SMTP, segredos da verificação em duas etapas). Separada da
+# SECRET_KEY: vazar uma não entrega a outra. Em branco, usa a SECRET_KEY (comportamento antigo). Depois de definir ou
+# trocar, a faxina diária regrava os segredos com ela; as antigas ficam em FIELD_ENCRYPTION_KEY_FALLBACKS até lá.
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY', '').strip()
+FIELD_ENCRYPTION_KEY_FALLBACKS = env_list('FIELD_ENCRYPTION_KEY_FALLBACKS')
+if FIELD_ENCRYPTION_KEY and len(FIELD_ENCRYPTION_KEY) < 32:
+    raise ImproperlyConfigured('FIELD_ENCRYPTION_KEY precisa ter pelo menos 32 caracteres aleatórios.')
+
 # Necessário quando o site é acessado por HTTPS ou por outro endereço (ex.: https://eventos.exemplo.br)
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 

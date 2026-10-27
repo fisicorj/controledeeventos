@@ -359,6 +359,11 @@ if [ -z "$(get_param "${SSM_PATH}/secret_key")" ]; then
   put_secret "${SSM_PATH}/secret_key" "$(python3 -c \
     "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(64)))")"
 fi
+# Chave própria da senha do SMTP e dos segredos da verificação em duas etapas (core/crypto.py). Numa instalação que
+# já existia, os segredos antigos continuam legíveis pela SECRET_KEY e a faxina diária os regrava com esta.
+if [ -z "$(get_param "${SSM_PATH}/field_encryption_key")" ]; then
+  put_secret "${SSM_PATH}/field_encryption_key" "$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")"
+fi
 unset APP_PASSWORD
 # Endereço do /admin/ do Django: um caminho difícil de adivinhar, gerado uma vez e guardado no SSM.
 ADMIN_URL=$(aws_q ssm get-parameter --name "${SSM_PATH}/admin_url" --query 'Parameter.Value' --output text \
@@ -964,6 +969,7 @@ if https:
     base_env['SECURE_HSTS_SECONDS'] = e['HSTS_SECONDS']
 secrets = [
     {'name': 'SECRET_KEY', 'valueFrom': f'{ssm}/secret_key'},
+    {'name': 'FIELD_ENCRYPTION_KEY', 'valueFrom': f'{ssm}/field_encryption_key'},
     {'name': 'DB_PASSWORD', 'valueFrom': f'{ssm}/db_password'},
 ]
 

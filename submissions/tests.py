@@ -230,6 +230,11 @@ class BlindReviewTests(CallSetup):
         response = self.client.get(reverse('submission_file', args=[self.submission.pk]))
         self.assertNotIn('ana', response['Content-Disposition'])
         self.assertIn(f'trabalho-{self.submission.pk}-v1.pdf', response['Content-Disposition'])
+        # PDF enviado por outra pessoa, aberto no próprio portal: sai com a CSP do portal e sem adivinhação de tipo.
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        if response.has_header('Content-Security-Policy'):  # CSP_MODE=off desliga
+            self.assertIn("object-src 'none'", response['Content-Security-Policy'])
+            self.assertIn("frame-ancestors 'none'", response['Content-Security-Policy'])
 
     def test_outros_nao_acessam(self):
         self.client.force_login(make_user('curioso'))
