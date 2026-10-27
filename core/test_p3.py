@@ -259,7 +259,15 @@ class UnverifiedAccountsTests(TestCase):
             ana.delete()
 
 
+@override_settings(FIELD_ENCRYPTION_KEY='chave-de-teste-dos-segredos-0123456789')
 class DeployCheckTests(TestCase):
+    def test_sem_chave_propria_dos_segredos(self):
+        from core.checks import arena_deploy_checks
+
+        with override_settings(FIELD_ENCRYPTION_KEY=''):
+            self.assertIn('arena.W006', [w.id for w in arena_deploy_checks(None)])
+        self.assertNotIn('arena.W006', [w.id for w in arena_deploy_checks(None)])
+
     def test_avisos(self):
         from core.checks import arena_deploy_checks
 

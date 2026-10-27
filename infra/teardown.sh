@@ -153,7 +153,7 @@ aws_q ecr delete-repository --repository-name "${APP}" --force > /dev/null 2>&1 
 
 # SSM
 echo "Removendo os segredos do SSM..."
-for P in secret_key db_password db_master_password db_host allowed_hosts admin_url origin_secret; do
+for P in secret_key field_encryption_key db_password db_master_password db_host allowed_hosts admin_url origin_secret; do
   aws_q ssm delete-parameter --name "${SSM_PATH}/${P}" 2>/dev/null || true
 done
 

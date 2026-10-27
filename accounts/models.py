@@ -113,7 +113,7 @@ class MfaDevice(models.Model):
     """Verificação em duas etapas por aplicativo autenticador (TOTP, RFC 6238). Ver accounts/mfa.py."""
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mfa_device')
-    # Segredo criptografado com a chave derivada da SECRET_KEY (core/crypto.py).
+    # Segredo criptografado com a FIELD_ENCRYPTION_KEY (ou, sem ela, com a SECRET_KEY): ver core/crypto.py.
     secret = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     # Preenchido quando a pessoa digita o primeiro código certo; antes disso o cadastro não vale.

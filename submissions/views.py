@@ -208,6 +208,9 @@ def submission_file(request, pk):
         filename=name,
         content_type=content_type if inline else 'application/octet-stream',
     )
+    # O PDF sai com a mesma CSP do portal (SecurityHeadersMiddleware: object-src 'none', scripts só do portal,
+    # frame-ancestors 'none'). A diretiva "sandbox" ficou de fora de propósito: o Chrome não carrega o leitor de PDF
+    # em documento isolado por ela, e o arquivo deixaria de abrir para avaliadores e organização.
     response['X-Content-Type-Options'] = 'nosniff'
     return response
 

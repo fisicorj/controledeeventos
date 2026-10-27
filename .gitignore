@@ -31,6 +31,9 @@ certs/
 *.bak
 backups/
 
+# Arquivos gerados por assistentes (rascunhos, não fazem parte do projeto)
+Claude outputs/
+
 # Editores e sistema
 .idea/
 .vscode/

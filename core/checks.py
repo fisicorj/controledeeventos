@@ -46,6 +46,15 @@ def arena_deploy_checks(app_configs, **kwargs):
                 id='arena.W005',
             )
         )
+    if not settings.FIELD_ENCRYPTION_KEY:
+        warnings.append(
+            Warning(
+                'A senha do SMTP e os segredos da verificação em duas etapas usam a SECRET_KEY como chave.',
+                hint='Defina FIELD_ENCRYPTION_KEY no .env (python -c "import secrets; '
+                'print(secrets.token_urlsafe(48))"). Nada se perde: a faxina diária regrava os segredos com ela.',
+                id='arena.W006',
+            )
+        )
     # Senha do papel da aplicação e, se houver, a do dono das tabelas (só presente onde roda o migrate).
     passwords = [('DB_PASSWORD', settings.DATABASES['default'].get('PASSWORD') or '')]
     if settings.DB_MIGRATE_USER:
